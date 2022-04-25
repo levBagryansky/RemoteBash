@@ -3,17 +3,15 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define MAXLINE 1024
 
-//Коннектится с юзером
-int ConnectWithUser();
+int accepted;
 
-//Получает сообщения и посылает их в pipe_get_fds
-int GetMessages(int pipe_write_fd){
-    char *str = "ls\n\0";
-    //write(pipe_write_fd, str, 100);
-    char buf[1024] = {0};
+//Коннектится с юзером
+int ConnectWithUser(){
     struct sockaddr_in serv_addr;
 
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -31,21 +29,30 @@ int GetMessages(int pipe_write_fd){
     printf("listened\n");
     int acc_fd = accept(sock_fd, NULL, NULL);
     printf("accepted\n");
+    return acc_fd;
+}
+
+//Получает сообщения и посылает их в pipe_get_fds
+int GetMessages(int pipe_write_fd, int acc_fd){
+    char buf[1024] = {0};
     int n;
     while (1) {
         n = read(acc_fd, buf, MAXLINE);
         write(pipe_write_fd, buf, n);
+        memset(buf, 0, n);
     }
 }
 
 //из pipe_send_fds посылвет строки клиенту
-int SendMessages(int pipe_read_send_fd){
+int SendMessages(int pipe_read_send_fd, int acc_fd){
     char c;
-    char s[100];
+    char s[MAXLINE];
     int txt_fd = open("txt",  O_WRONLY | O_CREAT | O_TRUNC, 0666);
     while (1) {
-        int n = read(pipe_read_send_fd, s, 100);
+        int n = read(pipe_read_send_fd, s, MAXLINE);
+        write(acc_fd, s, n);
         write(STDOUT_FILENO, s, n);
+        memset(s, 0, MAXLINE);
     }
 }
 
@@ -75,11 +82,16 @@ int main(){
 
     int forked = fork();
     if(!forked){
+        int acc_fd = ConnectWithUser();
+        if(acc_fd < 0){
+            perror("ConnectWithUser == -1");
+            exit(1);
+        }
         forked = fork();
         if(!forked) {
-            SendMessages(pipe_send_fds[0]);
+            SendMessages(pipe_send_fds[0], acc_fd);
         } else{
-            GetMessages(pipe_get_fds[1]);
+            GetMessages(pipe_get_fds[1], acc_fd);
         }
 
     } else{
