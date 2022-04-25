@@ -10,7 +10,7 @@
 #define PORT 1e4
 
 int main(int argc, char** argv) {
-    char buf[1024] = {0};
+    char buf[MAXLINE] = {0};
     printf("TCP mode\n");
 
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -36,5 +36,9 @@ int main(int argc, char** argv) {
     while (1){
         n = read(STDIN_FILENO, buf, 256);
         write(sock_fd, buf, n);
+        memset(buf, 0, MAXLINE);
+        n = read(sock_fd, buf, MAXLINE);
+        printf("\n");
+        write(STDOUT_FILENO, buf, n);
     }
 }
