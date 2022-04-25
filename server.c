@@ -12,19 +12,17 @@ int ConnectWithUser();
 //Получает сообщения и посылает их в pipe_get_fds
 int GetMessages(int pipe_write_fd){
     char *str = "ls\n\0";
-    write(pipe_write_fd, str, 100);
-    write(pipe_write_fd, "exit\n", 6);
-
-    printf("TCP mode\n");
-    char buf[MAXLINE];
+    //write(pipe_write_fd, str, 100);
+    char buf[1024] = {0};
     struct sockaddr_in serv_addr;
 
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd == -1) {
-        perror("sock_fd == -1, exit\n");
+        perror("sock_fd == -1, exit");
     }
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+//        serv_addr.sin_addr.s_addr = inet_addr("192.168.1.153");
     serv_addr.sin_port = htons(1e4);
 
     bind(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
@@ -47,7 +45,7 @@ int SendMessages(int pipe_read_send_fd){
     int txt_fd = open("txt",  O_WRONLY | O_CREAT | O_TRUNC, 0666);
     while (1) {
         int n = read(pipe_read_send_fd, s, 100);
-        write(txt_fd, s, n);
+        write(STDOUT_FILENO, s, n);
     }
 }
 
