@@ -1,0 +1,90 @@
+#include <unistd.h>
+#include <stdio.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+
+#define MAXLINE 1024
+
+//Коннектится с юзером
+int ConnectWithUser();
+
+//Получает сообщения и посылает их в pipe_get_fds
+int GetMessages(int pipe_write_fd){
+    char *str = "ls\n\0";
+    write(pipe_write_fd, str, 100);
+    write(pipe_write_fd, "exit\n", 6);
+
+    printf("TCP mode\n");
+    char buf[MAXLINE];
+    struct sockaddr_in serv_addr;
+
+    int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock_fd == -1) {
+        perror("sock_fd == -1, exit\n");
+    }
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_port = htons(1e4);
+
+    bind(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+    printf("binded\n");
+    listen(sock_fd, 2);
+    printf("listened\n");
+    int acc_fd = accept(sock_fd, NULL, NULL);
+    printf("accepted\n");
+    int n;
+    while (1) {
+        n = read(acc_fd, buf, MAXLINE);
+        write(pipe_write_fd, buf, n);
+    }
+}
+
+//из pipe_send_fds посылвет строки клиенту
+int SendMessages(int pipe_read_send_fd){
+    char c;
+    char s[100];
+    int txt_fd = open("txt",  O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    while (1) {
+        int n = read(pipe_read_send_fd, s, 100);
+        write(txt_fd, s, n);
+    }
+}
+
+int DoBash(int pipe_read_get_fd, int pipe_write_send_fd){
+    int clone_stdin = dup(STDIN_FILENO);
+    int clone_stdout = dup(STDOUT_FILENO);
+    dup2(pipe_read_get_fd, STDIN_FILENO);
+    dup2(pipe_write_send_fd, STDOUT_FILENO);
+    char *bash_args[] = {"sh", NULL};
+    int exected = execvp("sh", bash_args);
+    if (exected){
+        perror("Execvp error");
+    }
+    dup2(clone_stdin, STDIN_FILENO);
+    dup2(clone_stdout, STDOUT_FILENO);
+}
+
+int main(){
+    int pipe_get_fds[2];
+    int pipe_send_fds[2];
+    if(pipe(pipe_get_fds)){
+        perror("pipe_get error");
+    }
+    if(pipe(pipe_send_fds)){
+        perror("pipe_send error");
+    }
+
+    int forked = fork();
+    if(!forked){
+        forked = fork();
+        if(!forked) {
+            SendMessages(pipe_send_fds[0]);
+        } else{
+            GetMessages(pipe_get_fds[1]);
+        }
+
+    } else{
+        DoBash(pipe_get_fds[0], pipe_send_fds[1]);
+    }
+}
