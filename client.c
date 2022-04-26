@@ -28,6 +28,10 @@ int main(int argc, char** argv) {
         }
 
         int n, len;
+        char *str = "I know client datas\n\0";
+        sendto(sock_fd, str, 21, MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
+        n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, &len);
+        write(STDOUT_FILENO, buf, n);
         while (1){
             n = read(STDIN_FILENO, buf, MAXLINE);
             printf("buf = %s", buf);
