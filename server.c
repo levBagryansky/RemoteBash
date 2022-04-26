@@ -9,9 +9,51 @@
 #include <arpa/inet.h>
 
 #define MAXLINE 1024
+#define PORT    1e4
 
 int udp_flag = 0;
 struct sockaddr_in cli_addr;
+
+//С помощью бродкаста передавать данные сервера
+int DistributeBroadcastServer(){
+    char buf[MAXLINE] = {0};
+
+    int sock_fd_rcv, sock_fd_snd;
+    struct sockaddr_in serv_addr, cli_addr;
+    memset(&serv_addr, 0, sizeof(serv_addr));
+    memset(&cli_addr, 0, sizeof(cli_addr));
+
+    sock_fd_rcv = socket(AF_INET, SOCK_DGRAM, 0);
+    if(sock_fd_rcv < 0){
+        perror("socket creation failed");
+        exit(1);
+    }
+
+    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(PORT);
+
+    int a = 1;
+    setsockopt(sock_fd_rcv, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a));
+    bind(sock_fd_rcv, (struct sockaddr*) &serv_addr, sizeof(serv_addr));
+    printf("Broadcast connecting..\n");
+    for (int i = 0; i < 1; ++i) {
+        socklen_t len = sizeof(cli_addr);
+        recvfrom(sock_fd_rcv, buf, sizeof(buf), MSG_WAITALL,
+                 (struct sockaddr *) &cli_addr, &len);
+
+        printf("Yeah!, got message from broadcast, ip = %s, port = %d\n",
+               inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
+
+        sock_fd_snd = socket(AF_INET, SOCK_DGRAM, 0);
+        char buf_answer[1024] = "I am Bagr server";
+        sendto(sock_fd_snd, buf_answer, strlen(buf_answer), MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
+        memset(buf_answer, 0, sizeof buf_answer);
+        memset(buf, 0, sizeof buf);
+        close(sock_fd_snd);
+    }
+    close(sock_fd_rcv);
+}
 
 //Коннектится с юзером
 int ConnectWithUser(){
@@ -28,8 +70,8 @@ int ConnectWithUser(){
     }
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_addr.s_addr = inet_addr("192.168.1.153");
-    serv_addr.sin_port = htons(1e4);
+    //serv_addr.sin_addr.s_addr = inet_addr("192.168.1.153");
+    serv_addr.sin_port = htons(PORT);
 
     bind(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
     printf("binded\n");
@@ -42,6 +84,7 @@ int ConnectWithUser(){
         write(STDOUT_FILENO, buf, MAXLINE);
         char* str = "Got answer from server\n";
         int sended = sendto(sock_fd, str, 24, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
+        printf("sended = %d\n", sended);
         if(sended == -1){
             perror("sendto error");
         }
@@ -73,8 +116,6 @@ int GetMessages(int pipe_write_fd, int acc_fd) {
         while (1) {
             n = read(acc_fd, buf, MAXLINE);
             write(pipe_write_fd, buf, n);
-            char *command_str = "Command: ";
-            //write(STDOUT_FILENO, command_str, 10);
             write(STDOUT_FILENO, buf, n);
             memset(buf, 0, n);
         }
@@ -104,6 +145,7 @@ int DoBash(int pipe_read_get_fd, int pipe_write_send_fd){
     int clone_stdout = dup(STDOUT_FILENO);
     dup2(pipe_read_get_fd, STDIN_FILENO);
     dup2(pipe_write_send_fd, STDOUT_FILENO);
+    dup2(pipe_write_send_fd, STDERR_FILENO);
     char *bash_args[] = {"sh", NULL};
     int exected = execvp("sh", bash_args);
     if (exected){
@@ -129,6 +171,7 @@ int main(int argc, char **argv){
         perror("pipe_send error");
     }
 
+    DistributeBroadcastServer();
     int acc_fd = ConnectWithUser();
     int forked = fork();
     if(!forked){
