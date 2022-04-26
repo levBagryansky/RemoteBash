@@ -37,7 +37,9 @@ int BroadcastFirstConnect(){
     recvfrom(sock_fd, buf, sizeof(buf), MSG_WAITALL, (struct sockaddr *) &serv_addr, &len);
     printf("Yeah! Get answer from server: ip = %s\n", inet_ntoa(serv_addr.sin_addr));
     close(sock_fd);
+    return 0;
 }
+
 int DoUDP(char *buf){
     printf("UDP mode\n");
     int sock_fd;
@@ -50,7 +52,7 @@ int DoUDP(char *buf){
     int n, len;
     char *str = "I know client datas\n\0";
     sendto(sock_fd, str, 21, MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
-    n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, &len);
+    n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&len);
     write(STDOUT_FILENO, buf, n);
     int forked = fork();
     if(forked) {
@@ -60,16 +62,18 @@ int DoUDP(char *buf){
                 break;
             }
             sendto(sock_fd, buf, n, MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
-            memset(buf, 0, sizeof(buf));
+            memset(buf, 0, MAXLINE);
         }
     } else{
         while (1) {
-            n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, &len);
+            n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&len);
             write(STDOUT_FILENO, buf, n);
-            memset(buf, 0, sizeof(buf));
+            memset(buf, 0, MAXLINE);
         }
     }
+    return 0;
 }
+
 int DoTCP(char *buf){
     printf("TCP mode\n");
     int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -100,6 +104,7 @@ int DoTCP(char *buf){
             memset(buf, 0, MAXLINE);
         }
     }
+    return 0;
 }
 
 int main(int argc, char** argv) {
