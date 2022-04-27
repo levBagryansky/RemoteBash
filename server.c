@@ -14,6 +14,7 @@
 int udp_flag = 0;
 struct sockaddr_in cli_addr;
 
+
 //С помощью бродкаста передавать данные сервера
 int DistributeBroadcastServer(){
     char buf[MAXLINE] = {0};
@@ -53,6 +54,7 @@ int DistributeBroadcastServer(){
         close(sock_fd_snd);
     }
     close(sock_fd_rcv);
+    return 0;
 }
 
 //Коннектится с юзером
@@ -81,7 +83,7 @@ int ConnectWithUser(){
         memset(&cli_addr, 0, sizeof(cli_addr));
         int n = recvfrom(sock_fd, (char *) buf, MAXLINE,
                          MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
-        write(STDOUT_FILENO, buf, MAXLINE);
+        write(STDOUT_FILENO, buf, n);
         char* str = "Got answer from server\n";
         int sended = sendto(sock_fd, str, 24, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
         printf("sended = %d\n", sended);
@@ -158,6 +160,7 @@ int DoBash(int pipe_read_get_fd, int pipe_write_send_fd){
     }
     dup2(clone_stdin, STDIN_FILENO);
     dup2(clone_stdout, STDOUT_FILENO);
+    return -1;
 }
 
 int main(int argc, char **argv){
