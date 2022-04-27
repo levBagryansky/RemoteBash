@@ -99,26 +99,27 @@ int ConnectWithUser(){
 }
 
 //Получает сообщения и посылает их в pipe_get_fds
-int GetMessages(int pipe_write_fd, int acc_fd) {
+int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
     char buf[1024] = {0};
-    int n;
-    if (udp_flag) {
-        int len;
-        while (1){
-            int n = recvfrom(acc_fd, (char *) buf, MAXLINE,
+    int n, len;
+    while (1){
+        if(udp_flag) {
+            n = recvfrom(acc_fd, (char *) buf, MAXLINE,
                              MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
-            write(pipe_write_fd, buf, n);
-            write(STDOUT_FILENO, buf, n);
-            memset(buf, 0, n);
-        }
-    } else {
-        //TCP
-        while (1) {
+        } else{
             n = read(acc_fd, buf, MAXLINE);
-            write(pipe_write_fd, buf, n);
-            write(STDOUT_FILENO, buf, n);
-            memset(buf, 0, n);
         }
+        if(!strcmp(buf, "exit\n")){
+            write(pipe_write_fd, buf, n);
+            write(pipe_send_write, buf, n);
+            write(STDOUT_FILENO, buf, n);
+            printf("GetMessages Exits\n");
+            return 0;
+        }
+        write(pipe_write_fd, buf, n);
+        write(STDOUT_FILENO, buf, n);
+        memset(buf, 0, n);
+
     }
 }
 
@@ -134,6 +135,10 @@ int SendMessages(int pipe_read_send_fd, int acc_fd){
             }
         }else {
             write(acc_fd, str, n);
+        }
+        if(!strcmp(str, "exit\n")){
+            printf("SendMessages Exits\n");
+            return 0;
         }
         write(STDOUT_FILENO, str, n);
         memset(str, 0, MAXLINE);
@@ -183,7 +188,7 @@ int main(int argc, char **argv){
         if(!forked) {
             SendMessages(pipe_send_fds[0], acc_fd);
         } else{
-            GetMessages(pipe_get_fds[1], acc_fd);
+            GetMessages(pipe_get_fds[1], acc_fd, pipe_send_fds[1]);
         }
 
     } else{
