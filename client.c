@@ -58,15 +58,20 @@ int DoUDP(char *buf){
     if(forked) {
         while (1) {
             n = read(STDIN_FILENO, buf, MAXLINE);
-            if (!strcmp(buf, "-quit\n")) {
+            sendto(sock_fd, buf, n, MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
+            if (!strcmp(buf, "exit\n")) {
+                printf("Sender exits\n");
                 break;
             }
-            sendto(sock_fd, buf, n, MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
             memset(buf, 0, MAXLINE);
         }
     } else{
         while (1) {
             n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&len);
+            if (!strcmp(buf, "exit\n")) {
+                printf("Recver exits\n");
+                break;
+            }
             write(STDOUT_FILENO, buf, n);
             memset(buf, 0, MAXLINE);
         }
@@ -95,11 +100,19 @@ int DoTCP(char *buf){
         while (1) {
             n = read(STDIN_FILENO, buf, MAXLINE);
             write(sock_fd, buf, n);
+            if (!strcmp(buf, "exit\n")) {
+                printf("Sender exits\n");
+                break;
+            }
             memset(buf, 0, MAXLINE);
         }
     } else {
         while (1) {
             n = read(sock_fd, buf, MAXLINE);
+            if (!strcmp(buf, "exit\n")) {
+                printf("Recver exits\n");
+                break;
+            }
             write(STDOUT_FILENO, buf, n);
             memset(buf, 0, MAXLINE);
         }
