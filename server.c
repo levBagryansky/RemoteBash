@@ -1,19 +1,56 @@
+#include "StringFunctions.h"
 #include <unistd.h>
 #include <stdio.h>
-#include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 #define MAXLINE 1024
 #define PORT    1e4
 
 int udp_flag = 0;
 struct sockaddr_in cli_addr;
+int len = sizeof (cli_addr);
 
+int RcvAndWrite(char *buf, int sock_fd){
+    int n;
+    if(udp_flag){
+        n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *)&len);
+    } else{
+        n = read(sock_fd, buf, MAXLINE);
+    }
+    return n;
+}
+
+int CP_FromClient(char *str, int sock_fd){
+    char path_to[MAXLINE];
+    GetNumWord(str, path_to, 2);
+    int path_to_fd = open(path_to, O_WRONLY | O_TRUNC | O_CREAT, 0666);
+    if(path_to_fd == -1){
+        perror("Open error");
+        return -1;
+    }
+    char buf[MAXLINE];
+
+    while (RcvAndWrite(buf, sock_fd) == MAXLINE){
+        write(path_to_fd, buf, MAXLINE);
+    }
+    int n = RcvAndWrite(buf, sock_fd);
+    write(path_to_fd, buf, n);
+    close(path_to_fd);
+
+    char *str_copied = "Copied\n";
+    if(udp_flag) {
+        sendto(sock_fd, str_copied, 7, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
+    }
+    else{
+        write(sock_fd, str_copied, 7);
+    }
+    return 0;
+}
 
 //С помощью бродкаста передавать данные сервера
 int DistributeBroadcastServer(){
@@ -118,7 +155,11 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
             printf("GetMessages Exits\n");
             return 0;
         }
-        write(pipe_write_fd, buf, n);
+        if(CP_CommandDetected(buf)){
+            CP_FromClient(buf, acc_fd);
+        }else {
+            write(pipe_write_fd, buf, n);
+        }
         write(STDOUT_FILENO, buf, n);
         memset(buf, 0, n);
 
