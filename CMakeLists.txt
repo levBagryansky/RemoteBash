@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(RemoteBash)
 
 set(CMAKE_C_FLAGS "-Wall -Wextra -pthread")
+include_directories(includes)
 
 add_executable(Server server.c)
 add_executable(Client client.c)
