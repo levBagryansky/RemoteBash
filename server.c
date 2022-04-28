@@ -229,6 +229,15 @@ int DoBash(int pipe_read_get_fd, int pipe_write_send_fd){
 }
 
 int main(int argc, char **argv){
+    int forked;
+#ifdef DAEMON
+    forked = fork();
+    if(forked == 0){
+        printf("Daemon\n");
+        return 0;
+    }
+#endif
+
     if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))){
         printf("UDP mode\n");
         udp_flag = 1;
@@ -246,7 +255,7 @@ int main(int argc, char **argv){
 
     DistributeBroadcastServer();
     int acc_fd = ConnectWithUser();
-    int forked = fork();
+    forked = fork();
     if(!forked){
         if(acc_fd < 0){
             perror("ConnectWithUser == -1");
