@@ -41,7 +41,7 @@ int RcvAndWrite(char *buf, int sock_fd){
     return n;
 }
 
-int CP2Server(char *str, int sock_fd){
+int CP2Server(char *str, int n, int sock_fd){
     char path_from[MAXLINE];
     GetNumWord(str, path_from, 1);
     int path_from_fd = open(path_from, O_RDONLY);
@@ -52,20 +52,61 @@ int CP2Server(char *str, int sock_fd){
 
     int file_len = GetFileSize(path_from_fd);
     char *text = (char *) calloc(file_len, sizeof (char));
+    int num_of_send = (file_len + MAXLINE - 1) / MAXLINE;
     if(read(path_from_fd, text, file_len) == -1){
         perror("read error");
+        return -1;
+    }
+    Send2Server(str, sock_fd, n);
+
+    /*
+    printf("recving\n");
+    char no_error = 1;
+    if(udp_flag){
+        recvfrom(sock_fd, &no_error, 1, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&len);
+    } else{
+        read(sock_fd, &no_error, 1);
+    }
+    printf("no_error = %d\n", no_error);
+
+    if(!no_error){
+        printf("Incorrect command format\n");
+        return -1;
+    }
+    */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    if(udp_flag) {
+        sendto(sock_fd, &num_of_send, sizeof(int), MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
+    }
+    else{
+        write(sock_fd, &num_of_send, sizeof(int));
     }
     char buf[MAXLINE];
-    for (int i = 0; i < file_len / MAXLINE; ++i) {
+    for (int i = 0; i < (file_len - 1) / MAXLINE; ++i) {
         for (int j = 0; j < MAXLINE; ++j) {
             buf[j] = text[MAXLINE * i + j];
         }
         Send2Server(buf, sock_fd, MAXLINE);
     }
-    for (int i = 0; i < file_len % MAXLINE; ++i) {
+    for (int i = 0; i < (file_len - 1) % MAXLINE + 1; ++i) {
         buf[i] = text[MAXLINE * (file_len / MAXLINE) + i];
     }
     Send2Server(buf, sock_fd, file_len % MAXLINE);
+    close(path_from_fd);
     return 0;
 }
 
@@ -133,6 +174,10 @@ int DoCommunication(char* buf){
     if(forked) {
         while (1) {
             int n = read(STDIN_FILENO, buf, MAXLINE);
+            if(CP_CommandDetected(buf)){
+                CP2Server(buf, n, sock_fd);
+                goto L;
+            }
             if(Send2Server(buf, sock_fd, n) == -1){
                 printf("Send2Server error\n");
                 break;
@@ -141,9 +186,7 @@ int DoCommunication(char* buf){
                 printf("Sender exits\n");
                 break;
             }
-            if(CP_CommandDetected(buf)){
-                CP2Server(buf, sock_fd);
-            }
+            L:
             memset(buf, 0, MAXLINE);
         }
     } else{
