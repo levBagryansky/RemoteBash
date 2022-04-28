@@ -1,19 +1,73 @@
-#include <stdio.h>
+#include "StringFunctions.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
-#define MAXLINE   1024
 #define PORT      1e4
 #define EXIT_CODE -2
 
 struct sockaddr_in serv_addr;
 int udp_flag = 0;
 int len = sizeof (serv_addr);
-int CP2Server();
+
+int Send2Server(char *buf, int sock_fd, int n){
+    int ret;
+    if(udp_flag) {
+        ret = sendto(sock_fd, buf, n, MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
+    }
+    else{
+        ret = write(sock_fd, buf, n);
+    }
+    return ret;
+}
+
+int RcvAndWrite(char *buf, int sock_fd){
+    int n;
+    if(udp_flag){
+        n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&len);
+    } else{
+        n = read(sock_fd, buf, MAXLINE);
+    }
+    if (!strcmp(buf, "exit\n")) {
+        printf("Recver exits\n");
+        return EXIT_CODE;
+    }
+    write(STDOUT_FILENO, buf, n);
+    memset(buf, 0, MAXLINE);
+    return n;
+}
+
+int CP2Server(char *str, int sock_fd){
+    char path_from[MAXLINE];
+    GetNumWord(str, path_from, 1);
+    int path_from_fd = open(path_from, O_RDONLY);
+    if(path_from_fd == -1){
+        perror("Open error");
+        return -1;
+    }
+
+    int file_len = GetFileSize(path_from_fd);
+    char *text = (char *) calloc(file_len, sizeof (char));
+    if(read(path_from_fd, text, file_len) == -1){
+        perror("read error");
+    }
+    char buf[MAXLINE];
+    for (int i = 0; i < file_len / MAXLINE; ++i) {
+        for (int j = 0; j < MAXLINE; ++j) {
+            buf[j] = text[MAXLINE * i + j];
+        }
+        Send2Server(buf, sock_fd, MAXLINE);
+    }
+    for (int i = 0; i < file_len % MAXLINE; ++i) {
+        buf[i] = text[MAXLINE * (file_len / MAXLINE) + i];
+    }
+    Send2Server(buf, sock_fd, file_len % MAXLINE);
+    return 0;
+}
 
 int BroadcastFirstConnect(){
     printf("Broadcast connecting..\n");
@@ -44,39 +98,6 @@ int BroadcastFirstConnect(){
     return 0;
 }
 
-int ReadAndSend2Server(char *buf, int sock_fd){
-    int n = read(STDIN_FILENO, buf, MAXLINE);
-    int ret;
-    if(udp_flag) {
-        ret = sendto(sock_fd, buf, n, MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
-    }
-    else{
-        ret = write(sock_fd, buf, n);
-    }
-    if (!strcmp(buf, "exit\n")) {
-        printf("Sender exits\n");
-        return EXIT_CODE;
-    }
-    memset(buf, 0, MAXLINE);
-    return ret;
-}
-
-int RcvAndWrite(char *buf, int sock_fd){
-    int n;
-    if(udp_flag){
-        n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&len);
-    } else{
-        n = read(sock_fd, buf, MAXLINE);
-    }
-    if (!strcmp(buf, "exit\n")) {
-        printf("Recver exits\n");
-        return EXIT_CODE;
-    }
-    write(STDOUT_FILENO, buf, n);
-    memset(buf, 0, MAXLINE);
-    return n;
-}
-
 int DoCommunication(char* buf){
     int sock_fd;
     if(udp_flag){
@@ -101,7 +122,7 @@ int DoCommunication(char* buf){
     } else{ //TCP
         int connect_fd = connect(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         if (connect_fd < 0) {
-            printf("connect_fd == %d\n", connect_fd);
+            perror("connect error");
             return 1;
         }
         printf("connect_fd = %d\n", connect_fd);
@@ -111,9 +132,19 @@ int DoCommunication(char* buf){
     int forked = fork();
     if(forked) {
         while (1) {
-            if(ReadAndSend2Server(buf, sock_fd) == EXIT_CODE){
+            int n = read(STDIN_FILENO, buf, MAXLINE);
+            if(Send2Server(buf, sock_fd, n) == -1){
+                printf("Send2Server error\n");
                 break;
             }
+            if (!strcmp(buf, "exit\n")) {
+                printf("Sender exits\n");
+                break;
+            }
+            if(CP_CommandDetected(buf)){
+                CP2Server(buf, sock_fd);
+            }
+            memset(buf, 0, MAXLINE);
         }
     } else{
         while (1) {
@@ -122,7 +153,7 @@ int DoCommunication(char* buf){
             }
         }
     }
-
+    return 0;
 }
 
 int main(int argc, char** argv) {
@@ -133,9 +164,7 @@ int main(int argc, char** argv) {
 
     if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))) {
         udp_flag++;
-        //DoUDP(buf);
     } else {
-        //DoTCP(buf);
     }
     DoCommunication(buf);
 }
