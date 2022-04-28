@@ -15,7 +15,18 @@ int udp_flag = 0;
 struct sockaddr_in cli_addr;
 int len = sizeof (cli_addr);
 
-int RcvAndWrite(char *buf, int sock_fd){
+int Send2Client(char *buf, int sock_fd, int n){
+    int ret;
+    if(udp_flag) {
+        ret = sendto(sock_fd, buf, n, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
+    }
+    else{
+        ret = write(sock_fd, buf, n);
+    }
+    return ret;
+}
+
+int Rcv(char *buf, int sock_fd){
     int n;
     if(udp_flag){
         n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *)&len);
@@ -29,20 +40,33 @@ int CP_FromClient(char *str, int sock_fd){
     char path_to[MAXLINE];
     GetNumWord(str, path_to, 2);
     int path_to_fd = open(path_to, O_WRONLY | O_TRUNC | O_CREAT, 0666);
+    char no_error = 1;
     if(path_to_fd == -1){
+        no_error = 0;
         perror("Open error");
+        Send2Client(&no_error, sock_fd, 1);
         return -1;
     }
     char buf[MAXLINE];
-
-    while (RcvAndWrite(buf, sock_fd) == MAXLINE){
-        write(path_to_fd, buf, MAXLINE);
+    printf("Sended no_error\n");
+    Send2Client(&no_error, sock_fd, 1);
+    int num_of_rcvs;
+    if(udp_flag){
+        recvfrom(sock_fd, &num_of_rcvs, sizeof (int), MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *)&len);
+    } else{
+        read(sock_fd,  &num_of_rcvs, sizeof (int));
     }
-    int n = RcvAndWrite(buf, sock_fd);
-    write(path_to_fd, buf, n);
+    printf("num_of_rcvs = %d\n", num_of_rcvs);
+
+    int n;
+    for (int i = 0; i < num_of_rcvs; ++i) {
+        n = Rcv(buf, sock_fd);
+        write(path_to_fd, buf, n);
+    }
     close(path_to_fd);
 
     char *str_copied = "Copied\n";
+    write(STDOUT_FILENO, str_copied, 7);
     if(udp_flag) {
         sendto(sock_fd, str_copied, 7, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
     }
@@ -84,7 +108,7 @@ int DistributeBroadcastServer(){
                inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
 
         sock_fd_snd = socket(AF_INET, SOCK_DGRAM, 0);
-        char buf_answer[1024] = "I am Bagr server";
+        char buf_answer[MAXLINE] = "I am Bagr server";
         sendto(sock_fd_snd, buf_answer, strlen(buf_answer), MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
         memset(buf_answer, 0, sizeof buf_answer);
         memset(buf, 0, sizeof buf);
@@ -155,12 +179,12 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
             printf("GetMessages Exits\n");
             return 0;
         }
+        write(STDOUT_FILENO, buf, n);
         if(CP_CommandDetected(buf)){
             CP_FromClient(buf, acc_fd);
         }else {
             write(pipe_write_fd, buf, n);
         }
-        write(STDOUT_FILENO, buf, n);
         memset(buf, 0, n);
 
     }
