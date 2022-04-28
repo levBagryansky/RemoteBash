@@ -25,7 +25,7 @@ void GetNumWord(char *str, char *buf, int n){
         }
     }
     int i_buf = 0;
-    while (str[position] != ' ' && str[position] != 0 && position < MAXLINE){
+    while (str[position] != ' ' && str[position] != 0 && str[position] != '\n' && position < MAXLINE){
         buf[i_buf] = str[position];
         i_buf++;
         position++;
