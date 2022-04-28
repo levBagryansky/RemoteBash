@@ -230,13 +230,6 @@ int DoBash(int pipe_read_get_fd, int pipe_write_send_fd){
 
 int main(int argc, char **argv){
     int forked;
-#ifdef DAEMON
-    forked = fork();
-    if(forked == 0){
-        printf("Daemon\n");
-        return 0;
-    }
-#endif
 
     if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))){
         printf("UDP mode\n");

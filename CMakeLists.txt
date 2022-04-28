@@ -5,8 +5,8 @@ set(CMAKE_C_FLAGS "-Wall -Wextra -pthread")
 include_directories(includes)
 
 add_executable(Server server.c)
-add_executable(Server_daemon server.c)
-target_compile_definitions(Server_daemon PUBLIC DAEMON)
+#add_executable(Server_daemon server.c)
+#target_compile_definitions(Server_daemon PUBLIC DAEMON)
 
 add_executable(Client client.c)
 
@@ -27,4 +27,4 @@ add_dependencies(run_Client_udp Client)
 add_dependencies(run_Client_tcp Client)
 add_dependencies(run_Server_udp Server)
 add_dependencies(run_Server_tcp Server)
-add_dependencies(run_Server_daemon Server_daemon)
+#add_dependencies(run_Server_daemon Server_daemon)
