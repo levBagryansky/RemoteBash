@@ -14,6 +14,26 @@ struct sockaddr_in serv_addr;
 int udp_flag = 0;
 int len = sizeof (serv_addr);
 
+int Send2Server(char *buf, int sock_fd, int n);
+int RcvAndWrite(char *buf, int sock_fd);
+int CP2Server(char *str, int n, int sock_fd);
+int BroadcastFirstConnect();
+int DoCommunication(char* buf);
+
+int main(int argc, char** argv) {
+    char buf[MAXLINE] = {0};
+
+    BroadcastFirstConnect();
+    serv_addr.sin_port = htons(PORT);
+
+    if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))) {
+        udp_flag++;
+    } else {
+    }
+    DoCommunication(buf);
+}
+
+
 int Send2Server(char *buf, int sock_fd, int n){
     int ret;
     if(udp_flag) {
@@ -58,36 +78,6 @@ int CP2Server(char *str, int n, int sock_fd){
         return -1;
     }
     Send2Server(str, sock_fd, n);
-
-    /*
-    printf("recving\n");
-    char no_error = 1;
-    if(udp_flag){
-        recvfrom(sock_fd, &no_error, 1, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&len);
-    } else{
-        read(sock_fd, &no_error, 1);
-    }
-    printf("no_error = %d\n", no_error);
-
-    if(!no_error){
-        printf("Incorrect command format\n");
-        return -1;
-    }
-    */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     if(udp_flag) {
         sendto(sock_fd, &num_of_send, sizeof(int), MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
@@ -197,17 +187,4 @@ int DoCommunication(char* buf){
         }
     }
     return 0;
-}
-
-int main(int argc, char** argv) {
-    char buf[MAXLINE] = {0};
-
-    BroadcastFirstConnect();
-    serv_addr.sin_port = htons(PORT);
-
-    if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))) {
-        udp_flag++;
-    } else {
-    }
-    DoCommunication(buf);
 }

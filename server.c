@@ -15,6 +15,53 @@ int udp_flag = 0;
 struct sockaddr_in cli_addr;
 int len = sizeof (cli_addr);
 
+int Send2Client(char *buf, int sock_fd, int n);
+int Rcv(char *buf, int sock_fd);
+int CP_FromClient(char *str, int sock_fd);
+int DistributeBroadcastServer(); //С помощью бродкаста передавать данные сервера
+int ConnectWithUser(); //Коннектится с юзером
+int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write); //Получает сообщения и посылает их в pipe_get_fds
+int SendMessages(int pipe_read_send_fd, int acc_fd); //из pipe_send_fds посылвет строки клиенту
+int DoBash(int pipe_read_get_fd, int pipe_write_send_fd);
+
+int main(int argc, char **argv){
+    int forked;
+
+    if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))){
+        printf("UDP mode\n");
+        udp_flag = 1;
+    } else{
+        printf("TCP mode\n");
+    }
+    int pipe_get_fds[2];
+    int pipe_send_fds[2];
+    if(pipe(pipe_get_fds)){
+        perror("pipe_get error");
+    }
+    if(pipe(pipe_send_fds)){
+        perror("pipe_send error");
+    }
+
+    DistributeBroadcastServer();
+    int acc_fd = ConnectWithUser();
+    forked = fork();
+    if(!forked){
+        if(acc_fd < 0){
+            perror("ConnectWithUser == -1");
+            exit(1);
+        }
+        forked = fork();
+        if(!forked) {
+            SendMessages(pipe_send_fds[0], acc_fd);
+        } else{
+            GetMessages(pipe_get_fds[1], acc_fd, pipe_send_fds[1]);
+        }
+
+    } else{
+        DoBash(pipe_get_fds[0], pipe_send_fds[1]);
+    }
+}
+
 int Send2Client(char *buf, int sock_fd, int n){
     int ret;
     if(udp_flag) {
@@ -168,7 +215,7 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
     while (1){
         if(udp_flag) {
             n = recvfrom(acc_fd, (char *) buf, MAXLINE,
-                             MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
+                         MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
         } else{
             n = read(acc_fd, buf, MAXLINE);
         }
@@ -226,42 +273,4 @@ int DoBash(int pipe_read_get_fd, int pipe_write_send_fd){
     dup2(clone_stdin, STDIN_FILENO);
     dup2(clone_stdout, STDOUT_FILENO);
     return -1;
-}
-
-int main(int argc, char **argv){
-    int forked;
-
-    if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))){
-        printf("UDP mode\n");
-        udp_flag = 1;
-    } else{
-        printf("TCP mode\n");
-    }
-    int pipe_get_fds[2];
-    int pipe_send_fds[2];
-    if(pipe(pipe_get_fds)){
-        perror("pipe_get error");
-    }
-    if(pipe(pipe_send_fds)){
-        perror("pipe_send error");
-    }
-
-    DistributeBroadcastServer();
-    int acc_fd = ConnectWithUser();
-    forked = fork();
-    if(!forked){
-        if(acc_fd < 0){
-            perror("ConnectWithUser == -1");
-            exit(1);
-        }
-        forked = fork();
-        if(!forked) {
-            SendMessages(pipe_send_fds[0], acc_fd);
-        } else{
-            GetMessages(pipe_get_fds[1], acc_fd, pipe_send_fds[1]);
-        }
-
-    } else{
-        DoBash(pipe_get_fds[0], pipe_send_fds[1]);
-    }
 }
