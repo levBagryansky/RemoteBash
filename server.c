@@ -184,6 +184,7 @@ int DistributeBroadcastServer(){
         close(sock_fd_snd);
     }
     close(sock_fd_rcv);
+    log_info("Distributed server ip by broadcast");
     return 0;
 }
 
@@ -226,7 +227,7 @@ int ConnectWithUser(){
     printf("listened\n");
     int acc_fd = accept(sock_fd, NULL, NULL);
     printf("accepted\n");
-
+    log_info("Connected with user");
     return acc_fd;
 }
 
@@ -244,6 +245,7 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
                 log_perror("exit write error");
             write(STDOUT_FILENO, buf, n);
             printf("GetMessages Exits\n");
+            log_info("Exited");
             return 0;
         }
         write(STDOUT_FILENO, buf, n);
