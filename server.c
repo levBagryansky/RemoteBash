@@ -51,7 +51,7 @@ int main(int argc, char **argv){
     if(acc_fd < 0){
         log_error("Cannot connect with user");
     }
-    if(forked = fork() < 0){
+    if((forked = fork()) < 0){
         log_perror("Fork error");
         exit(1);
     }
@@ -60,7 +60,7 @@ int main(int argc, char **argv){
             perror("ConnectWithUser == -1");
             exit(1);
         }
-        if(forked = fork() < 0){
+        if((forked = fork()) < 0){
             log_perror("Fork error");
             exit(1);
         }
@@ -230,7 +230,6 @@ int ConnectWithUser(){
 //Получает сообщения и посылает их в pipe_get_fds
 int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
     char buf[1024] = {0};
-    int n, len;
     while (1){
         int n = Rcv(buf, acc_fd);
         if(n < 0){
