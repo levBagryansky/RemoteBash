@@ -1,4 +1,5 @@
 #include "StringFunctions.h"
+#include "Log.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -25,6 +26,7 @@ int SendMessages(int pipe_read_send_fd, int acc_fd); //из pipe_send_fds пос
 int DoBash(int pipe_read_get_fd, int pipe_write_send_fd);
 
 int main(int argc, char **argv){
+    init_log("./.log");
     int forked;
 
     if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))){
@@ -42,23 +44,40 @@ int main(int argc, char **argv){
         perror("pipe_send error");
     }
 
-    DistributeBroadcastServer();
+    if(DistributeBroadcastServer() < 0){
+        log_error("DistributeBroadcastServer");
+    }
     int acc_fd = ConnectWithUser();
-    forked = fork();
+    if(acc_fd < 0){
+        log_error("Cannot connect with user");
+    }
+    if(forked = fork() < 0){
+        log_perror("Fork error");
+        exit(1);
+    }
     if(!forked){
         if(acc_fd < 0){
             perror("ConnectWithUser == -1");
             exit(1);
         }
-        forked = fork();
+        if(forked = fork() < 0){
+            log_perror("Fork error");
+            exit(1);
+        }
         if(!forked) {
-            SendMessages(pipe_send_fds[0], acc_fd);
+            if(SendMessages(pipe_send_fds[0], acc_fd) < 0){
+                log_error("SendMessage");
+            }
         } else{
-            GetMessages(pipe_get_fds[1], acc_fd, pipe_send_fds[1]);
+            if(GetMessages(pipe_get_fds[1], acc_fd, pipe_send_fds[1]) < 0){
+                log_error("GetMessage");
+            }
         }
 
     } else{
-        DoBash(pipe_get_fds[0], pipe_send_fds[1]);
+        if(DoBash(pipe_get_fds[0], pipe_send_fds[1]) < 0){
+            log_error("Do Bash");
+        }
     }
 }
 
@@ -213,24 +232,27 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
     char buf[1024] = {0};
     int n, len;
     while (1){
-        if(udp_flag) {
-            n = recvfrom(acc_fd, (char *) buf, MAXLINE,
-                         MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
-        } else{
-            n = read(acc_fd, buf, MAXLINE);
+        int n = Rcv(buf, acc_fd);
+        if(n < 0){
+            log_perror("Rcv error");
+            return -1;
         }
         if(!strcmp(buf, "exit\n")){
-            write(pipe_write_fd, buf, n);
-            write(pipe_send_write, buf, n);
+            if(write(pipe_write_fd, buf, n) < 0 || write(pipe_send_write, buf, n) < 0)
+                log_perror("exit write error");
             write(STDOUT_FILENO, buf, n);
             printf("GetMessages Exits\n");
             return 0;
         }
         write(STDOUT_FILENO, buf, n);
         if(CP_CommandDetected(buf)){
-            CP_FromClient(buf, acc_fd);
+            if(CP_FromClient(buf, acc_fd) < 0)
+                log_error("CP_FromClient error");
+            return -1;
         }else {
-            write(pipe_write_fd, buf, n);
+            if(write(pipe_write_fd, buf, n) < 0){
+                log_perror("Write error");
+            }
         }
         memset(buf, 0, n);
 
@@ -242,29 +264,30 @@ int SendMessages(int pipe_read_send_fd, int acc_fd){
     char str[MAXLINE];
     while (1) {
         int n = read(pipe_read_send_fd, str, MAXLINE);
+        if(n < 0){
+            log_perror("read error");
+            perror("read error");
+        }
         if(udp_flag){
-            int sended = sendto(acc_fd, str, n, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
-            if(sended == -1){
-                perror("sendto error");
-            }
+            TRY(sendto(acc_fd, str, n, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
         }else {
-            write(acc_fd, str, n);
+            TRY(write(acc_fd, str, n))
         }
         if(!strcmp(str, "exit\n")){
             printf("SendMessages Exits\n");
             return 0;
         }
-        write(STDOUT_FILENO, str, n);
-        memset(str, 0, MAXLINE);
+        TRY(write(STDOUT_FILENO, str, n))
+        TRY(memset(str, 0, MAXLINE))
     }
 }
 
 int DoBash(int pipe_read_get_fd, int pipe_write_send_fd){
     int clone_stdin = dup(STDIN_FILENO);
     int clone_stdout = dup(STDOUT_FILENO);
-    dup2(pipe_read_get_fd, STDIN_FILENO);
-    dup2(pipe_write_send_fd, STDOUT_FILENO);
-    dup2(pipe_write_send_fd, STDERR_FILENO);
+    TRY(dup2(pipe_read_get_fd, STDIN_FILENO))
+    TRY(dup2(pipe_write_send_fd, STDOUT_FILENO))
+    TRY(dup2(pipe_write_send_fd, STDERR_FILENO))
     char *bash_args[] = {"sh", NULL};
     int exected = execvp("sh", bash_args);
     if (exected){
