@@ -1,0 +1,13 @@
+[Unit]
+Description = MyServer
+After=network.target
+[Service]
+Type=simple
+Restart=never
+RestartSec=2
+User=tardis3
+ExecStart=/home/tardis3/RemoteBash/build/Server
+
+[Install]
+WantedBy=multi-user.target
+
