@@ -4,11 +4,11 @@ project(RemoteBash)
 set(CMAKE_C_FLAGS "-Wall -Wextra -pthread")
 include_directories(includes)
 
-add_executable(Server server.c)
+add_executable(Server server.c src/Log.c src/StringFunctions.c)
 #add_executable(Server_daemon server.c)
 #target_compile_definitions(Server_daemon PUBLIC DAEMON)
 
-add_executable(Client client.c)
+add_executable(Client client.c src/StringFunctions.c)
 
 add_custom_target(run_Client_udp
         COMMAND ./Client udp)
