@@ -1,4 +1,6 @@
 #include "StringFunctions.h"
+char *CP_Command = "CP2Server";
+
 void GetNumWord(char *str, char *buf, int n){
     int position = 0;
     while (str[position] == ' '){

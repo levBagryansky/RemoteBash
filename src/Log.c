@@ -1,4 +1,4 @@
-#include "../includes/Log.h"
+#include "Log.h"
 
 static int log_fd = -1;
 static char buf_log[LOG_SIZE];
