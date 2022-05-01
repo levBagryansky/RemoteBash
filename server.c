@@ -115,29 +115,31 @@ int CP_FromClient(char *str, int sock_fd){
     }
     char buf[MAXLINE];
     printf("Sended no_error\n");
-    Send2Client(&no_error, sock_fd, 1);
+    if(Send2Client(&no_error, sock_fd, 1) < 0){
+        return -1;
+    }
     int num_of_rcvs;
     if(udp_flag){
-        recvfrom(sock_fd, &num_of_rcvs, sizeof (int), MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *)&len);
+        TRY(recvfrom(sock_fd, &num_of_rcvs, sizeof (int), MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *)&len))
     } else{
-        read(sock_fd,  &num_of_rcvs, sizeof (int));
+        TRY(read(sock_fd,  &num_of_rcvs, sizeof (int)))
     }
     printf("num_of_rcvs = %d\n", num_of_rcvs);
 
     int n;
     for (int i = 0; i < num_of_rcvs; ++i) {
-        n = Rcv(buf, sock_fd);
-        write(path_to_fd, buf, n);
+        TRY((n = Rcv(buf, sock_fd)))
+        TRY(write(path_to_fd, buf, n))
     }
     close(path_to_fd);
 
     char *str_copied = "Copied\n";
     write(STDOUT_FILENO, str_copied, 7);
     if(udp_flag) {
-        sendto(sock_fd, str_copied, 7, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
+        TRY(sendto(sock_fd, str_copied, 7, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
     }
     else{
-        write(sock_fd, str_copied, 7);
+        TRY(write(sock_fd, str_copied, 7))
     }
     return 0;
 }
@@ -153,6 +155,7 @@ int DistributeBroadcastServer(){
 
     sock_fd_rcv = socket(AF_INET, SOCK_DGRAM, 0);
     if(sock_fd_rcv < 0){
+        log_perror("socket creation failed");
         perror("socket creation failed");
         exit(1);
     }
@@ -162,20 +165,20 @@ int DistributeBroadcastServer(){
     serv_addr.sin_port = htons(PORT);
 
     int a = 1;
-    setsockopt(sock_fd_rcv, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a));
-    bind(sock_fd_rcv, (struct sockaddr*) &serv_addr, sizeof(serv_addr));
+    TRY(setsockopt(sock_fd_rcv, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a)))
+    TRY(bind(sock_fd_rcv, (struct sockaddr*) &serv_addr, sizeof(serv_addr)))
     printf("Broadcast connecting..\n");
     for (int i = 0; i < 1; ++i) {
         socklen_t len = sizeof(cli_addr);
-        recvfrom(sock_fd_rcv, buf, sizeof(buf), MSG_WAITALL,
-                 (struct sockaddr *) &cli_addr, &len);
+        TRY(recvfrom(sock_fd_rcv, buf, sizeof(buf), MSG_WAITALL,
+                 (struct sockaddr *) &cli_addr, &len))
 
         printf("Yeah!, got message from broadcast, ip = %s, port = %d\n",
                inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
 
-        sock_fd_snd = socket(AF_INET, SOCK_DGRAM, 0);
+        TRY((sock_fd_snd = socket(AF_INET, SOCK_DGRAM, 0)))
         char buf_answer[MAXLINE] = "I am Bagr server";
-        sendto(sock_fd_snd, buf_answer, strlen(buf_answer), MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
+        TRY(sendto(sock_fd_snd, buf_answer, strlen(buf_answer), MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
         memset(buf_answer, 0, sizeof buf_answer);
         memset(buf, 0, sizeof buf);
         close(sock_fd_snd);
@@ -277,7 +280,7 @@ int SendMessages(int pipe_read_send_fd, int acc_fd){
             return 0;
         }
         TRY(write(STDOUT_FILENO, str, n))
-        TRY(memset(str, 0, MAXLINE))
+        memset(str, 0, MAXLINE);
     }
 }
 
@@ -288,11 +291,8 @@ int DoBash(int pipe_read_get_fd, int pipe_write_send_fd){
     TRY(dup2(pipe_write_send_fd, STDOUT_FILENO))
     TRY(dup2(pipe_write_send_fd, STDERR_FILENO))
     char *bash_args[] = {"sh", NULL};
-    int exected = execvp("sh", bash_args);
-    if (exected){
-        perror("Execvp error");
-    }
-    dup2(clone_stdin, STDIN_FILENO);
-    dup2(clone_stdout, STDOUT_FILENO);
+    TRY(execvp("sh", bash_args))
+    TRY(dup2(clone_stdin, STDIN_FILENO))
+    TRY(dup2(clone_stdout, STDOUT_FILENO))
     return -1;
 }
