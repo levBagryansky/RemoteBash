@@ -184,7 +184,7 @@ int DistributeBroadcastServer(){
         close(sock_fd_snd);
     }
     close(sock_fd_rcv);
-    log_info("Distributed server ip by broadcast");
+    log_info("Distributed server ip by broadcast\n");
     return 0;
 }
 
@@ -245,7 +245,7 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
                 log_perror("exit write error");
             write(STDOUT_FILENO, buf, n);
             printf("GetMessages Exits\n");
-            log_info("Exited");
+            log_info("Exited\n");
             return 0;
         }
         write(STDOUT_FILENO, buf, n);
