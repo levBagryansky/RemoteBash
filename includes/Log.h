@@ -1,3 +1,6 @@
+#ifndef INCLUDES_LOG_H
+#define INCLUDES_LOG_H
+
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -31,3 +34,5 @@ int init_log(char* path);
 void print_log(char* str, ...);
 
 void printf_fd(int fd, char* str, ...);
+
+#endif

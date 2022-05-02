@@ -1,3 +1,6 @@
+#ifndef INCLUDES_STRING_FUNCTIONS
+#define INCLUDES_STRING_FUNCTIONS
+
 #include <sys/stat.h>
 #include <bits/types/FILE.h>
 #include <stdio.h>
@@ -9,3 +12,5 @@ int GetFileSize(int fd);
 int GetFileSize(int fd);
 int CopyFile(char *path_out, char *path_to);
 int CP_CommandDetected(char *buf);
+
+#endif //INCLUDES_STRING_FUNCTIONS
