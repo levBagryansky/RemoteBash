@@ -70,6 +70,7 @@ int main(int argc, char **argv){
             }
         } else{
             if(GetMessages(pipe_get_fds[1], acc_fd, pipe_send_fds[1]) < 0){
+                printf("GetMessage returned -1");
                 log_error("GetMessage");
             }
         }
@@ -110,14 +111,14 @@ int CP_FromClient(char *str, int sock_fd){
     if(path_to_fd == -1){
         no_error = 0;
         perror("Open error");
-        Send2Client(&no_error, sock_fd, 1);
+        //Send2Client(&no_error, sock_fd, 1);
         return -1;
     }
     char buf[MAXLINE];
     printf("Sended no_error\n");
-    if(Send2Client(&no_error, sock_fd, 1) < 0){
-        return -1;
-    }
+    //if(Send2Client(&no_error, sock_fd, 1) < 0){
+    //    return -1;
+   // }
     int num_of_rcvs;
     if(udp_flag){
         TRY(recvfrom(sock_fd, &num_of_rcvs, sizeof (int), MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *)&len))
@@ -244,9 +245,9 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
         }
         write(STDOUT_FILENO, buf, n);
         if(CP_CommandDetected(buf)){
-            if(CP_FromClient(buf, acc_fd) < 0)
+            if(CP_FromClient(buf, acc_fd) < 0) {
                 log_error("CP_FromClient error");
-            return -1;
+            }
         }else {
             if(write(pipe_write_fd, buf, n) < 0){
                 log_perror("Write error");
