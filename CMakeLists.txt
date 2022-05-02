@@ -4,7 +4,7 @@ project(RemoteBash)
 set(CMAKE_C_FLAGS "-Wall -Wextra -pthread")
 include_directories(includes)
 
-add_library(StringFunctions STATIC src/StringFunctions.c)
+add_library(StringFunctions SHARED src/StringFunctions.c)
 add_library(Log STATIC src/Log.c)
 
 add_executable(Server server.c)
