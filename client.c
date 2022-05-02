@@ -97,6 +97,7 @@ int CP2Server(char *str, int n, int sock_fd){
     }
     Send2Server(buf, sock_fd, file_len % MAXLINE);
     close(path_from_fd);
+
     return 0;
 }
 

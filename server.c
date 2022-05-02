@@ -135,12 +135,6 @@ int CP_FromClient(char *str, int sock_fd){
 
     char *str_copied = "Copied\n";
     write(STDOUT_FILENO, str_copied, 7);
-    if(udp_flag) {
-        TRY(sendto(sock_fd, str_copied, 7, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
-    }
-    else{
-        TRY(write(sock_fd, str_copied, 7))
-    }
     return 0;
 }
 
@@ -227,7 +221,7 @@ int ConnectWithUser(){
     printf("listened\n");
     int acc_fd = accept(sock_fd, NULL, NULL);
     printf("accepted\n");
-    log_info("Connected with user");
+    log_info("Connected with user\n");
     return acc_fd;
 }
 
