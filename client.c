@@ -10,6 +10,13 @@
 #define PORT      1e4
 #define EXIT_CODE -2
 
+#define TRY(cmd) \
+  if (cmd < 0) \
+  {              \
+    perror(#cmd); \
+    return(-1); \
+  }
+
 struct sockaddr_in serv_addr;
 int udp_flag = 0;
 int len = sizeof (serv_addr);
@@ -71,7 +78,15 @@ int CP2Server(char *str, int n, int sock_fd){
     }
 
     int file_len = GetFileSize(path_from_fd);
+    if(file_len < 0){
+        printf("GetFileSize returned %d\n", file_len);
+        return file_len;
+    }
     char *text = (char *) calloc(file_len, sizeof (char));
+    if(text == NULL){
+        perror("calloc error");
+        return -1;
+    }
     int num_of_send = (file_len + MAXLINE - 1) / MAXLINE;
     if(read(path_from_fd, text, file_len) == -1){
         perror("read error");
@@ -90,12 +105,12 @@ int CP2Server(char *str, int n, int sock_fd){
         for (int j = 0; j < MAXLINE; ++j) {
             buf[j] = text[MAXLINE * i + j];
         }
-        Send2Server(buf, sock_fd, MAXLINE);
+        TRY(Send2Server(buf, sock_fd, MAXLINE))
     }
     for (int i = 0; i < (file_len - 1) % MAXLINE + 1; ++i) {
         buf[i] = text[MAXLINE * (file_len / MAXLINE) + i];
     }
-    Send2Server(buf, sock_fd, file_len % MAXLINE);
+    TRY(Send2Server(buf, sock_fd, file_len % MAXLINE))
     close(path_from_fd);
 
     return 0;
@@ -117,14 +132,14 @@ int BroadcastFirstConnect(){
     serv_addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 
     int a = 1;
-    setsockopt(sock_fd, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a));
+    TRY(setsockopt(sock_fd, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a)))
     //bind(sock_fd, (struct sockaddr*) &serv_addr, sizeof (serv_addr));
 
-    sendto(sock_fd, buf, strlen(buf), MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr);
+    TRY(sendto(sock_fd, buf, strlen(buf), MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr))
 
     // получаем
     socklen_t len = sizeof(serv_addr);
-    recvfrom(sock_fd, buf, sizeof(buf), MSG_WAITALL, (struct sockaddr *) &serv_addr, &len);
+    TRY(recvfrom(sock_fd, buf, sizeof(buf), MSG_WAITALL, (struct sockaddr *) &serv_addr, &len))
     printf("Yeah! Get answer from server: ip = %s\n", inet_ntoa(serv_addr.sin_addr));
     close(sock_fd);
     return 0;
@@ -167,6 +182,7 @@ int DoCommunication(char* buf){
             int n = read(STDIN_FILENO, buf, MAXLINE);
             if(CP_CommandDetected(buf)){
                 CP2Server(buf, n, sock_fd);
+                printf("You can continue\n");
                 goto L;
             }
             if(Send2Server(buf, sock_fd, n) == -1){
