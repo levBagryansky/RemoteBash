@@ -43,8 +43,38 @@ int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip){
 }
 int Send2Server(char *buf, int sock_fd, int n);
 int RcvAndWrite(char *buf, int sock_fd);
-int PrintServersByBroadcast(char *buf){return buf - buf;}
 int CP2Server(char *str, int n, int sock_fd);
+int PrintServersByBroadcast(){
+    int exit_after_distributed = 1;
+    printf("Getting available servers..\n");
+    memset(&serv_addr, 0, sizeof(serv_addr));
+
+    int sock_fd;
+    if ( (sock_fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
+        perror("socket creation failed");
+        exit(1);
+    }
+
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(START_PORT);
+    serv_addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+
+    int a = 1;
+    TRY(setsockopt(sock_fd, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a)))
+    //bind(sock_fd, (struct sockaddr*) &serv_addr, sizeof (serv_addr));
+
+    TRY(sendto(sock_fd, &exit_after_distributed, sizeof(int), MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr))
+
+    // получаем
+    int port;
+    socklen_t len = sizeof(serv_addr);
+    TRY(recvfrom(sock_fd, &port, sizeof(port), MSG_WAITALL, (struct sockaddr *) &serv_addr, &len))
+
+    printf("port = %d\n", port);
+    printf("Yeah! Get answer from server: ip = %s\n", inet_ntoa(serv_addr.sin_addr));
+    close(sock_fd);
+    return 0;
+}
 int BroadcastFirstConnect(int *p_port);
 int DoCommunication(char* buf);
 
@@ -59,7 +89,7 @@ int main(int argc, char** argv) {
     }
 
     if(!strcmp(argv[1], "--broadcast") || !strcmp(argv[1], "--b")){
-        PrintServersByBroadcast(buf);
+        PrintServersByBroadcast();
         return 0;
     }
 
