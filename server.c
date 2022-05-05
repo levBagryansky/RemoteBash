@@ -51,6 +51,9 @@ int main(int argc, char **argv){
         }
         TRY((forked = fork()))
         if(forked == 0){
+            if(exit_after_distributed){
+                return 0;
+            }
             break;
         }
     }
@@ -158,8 +161,6 @@ int CP_FromClient(char *str, int sock_fd){
 
 //С помощью бродкаста передавать данные сервера
 int DistributeBroadcastServer(){
-    char buf[MAXLINE] = {0};
-
     int sock_fd_rcv, sock_fd_snd;
     struct sockaddr_in serv_addr, cli_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -180,23 +181,18 @@ int DistributeBroadcastServer(){
     TRY(setsockopt(sock_fd_rcv, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a)))
     TRY(bind(sock_fd_rcv, (struct sockaddr*) &serv_addr, sizeof(serv_addr)))
     printf("Broadcast connecting..\n");
-    for (int i = 0; i < 1; ++i) {
-        socklen_t len = sizeof(cli_addr);
-        TRY(recvfrom(sock_fd_rcv, buf, sizeof(buf), MSG_WAITALL,
-                 (struct sockaddr *) &cli_addr, &len))
 
-        printf("Yeah!, got message from broadcast, ip = %s, port = %d\n",
+    socklen_t len = sizeof(cli_addr);
+    TRY(recvfrom(sock_fd_rcv, &exit_after_distributed, sizeof(exit_after_distributed), MSG_WAITALL,
+                 (struct sockaddr *) &cli_addr, &len))
+    printf("Yeah!, got message from broadcast, ip = %s, port = %d\n",
                inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
 
-        TRY((sock_fd_snd = socket(AF_INET, SOCK_DGRAM, 0)))
-        char buf_answer[MAXLINE] = "I am Bagr server";
-        port++;
-        printf("port = %d\n", port);
-        TRY(sendto(sock_fd_snd, &port, sizeof(port), MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
-        memset(buf_answer, 0, sizeof buf_answer);
-        memset(buf, 0, sizeof buf);
-        close(sock_fd_snd);
-    }
+    TRY((sock_fd_snd = socket(AF_INET, SOCK_DGRAM, 0)))
+    port++;
+    printf("port = %d\n", port);
+    TRY(sendto(sock_fd_snd, &port, sizeof(port), MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
+    close(sock_fd_snd);
     close(sock_fd_rcv);
     log_info("Distributed server ip by broadcast\n");
     return 0;

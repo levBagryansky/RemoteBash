@@ -71,8 +71,6 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    system("cat /proc/self/status | grep CapEff");
-
     printf("name: %s, uid: %d\n", info->pw_name, info->pw_uid);
 
     if (login_into_user(argv[1]))
@@ -81,19 +79,5 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    if (setgid(info->pw_gid))
-    {
-        perror("setgid");
-        return -1;
-    }
-
-    if (setuid(info->pw_uid))
-    {
-        perror("setuid");
-        return -1;
-    }
-
-    system("cat /proc/self/status | grep CapEff");
-
-    execlp("id", "id", NULL);
+    return 0;
 }
