@@ -45,6 +45,7 @@ int main(int argc, char **argv){
     int distributed;
     while (1){
         distributed = DistributeBroadcastServer();
+        printf("exit_after_distributed = %d\n", exit_after_distributed);
         if(distributed == -1){
             log_error("DistributeBroadcastServer()");
             return -1;
@@ -58,6 +59,7 @@ int main(int argc, char **argv){
         }
     }
 
+    log_info("Started work with client\n");
     int pipe_get_fds[2];
     int pipe_send_fds[2];
     if(pipe(pipe_get_fds)){
