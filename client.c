@@ -23,12 +23,38 @@ int len = sizeof (serv_addr);
 
 int Send2Server(char *buf, int sock_fd, int n);
 int RcvAndWrite(char *buf, int sock_fd);
+int PrintServersByBroadcast(char *buf);
 int CP2Server(char *str, int n, int sock_fd);
 int BroadcastFirstConnect();
 int DoCommunication(char* buf);
 
+// Must be
+// ./Client [-t <UDP|TCP>] [<user>@]<IP>
+// ./Client —broadcast
 int main(int argc, char** argv) {
     char buf[MAXLINE] = {0};
+    if(argc < 2 || argc > 3){
+        printf("Wring format\n");
+        return 0;
+    }
+
+    if(!strcmp(argv[1], "--broadcast") || !strcmp(argv[1], "--b")){
+        PrintServersByBroadcast(buf);
+        return 0;
+    }
+
+    char *user_ip_str = argv[1];
+    if(!strcmp(argv[1], "-t")){
+        if(!strcmp(argv[1], "udp") || !strcmp(argv[1], "UDP")){
+            udp_flag++;
+        } else if(!strcmp(argv[1], "tcp") || !strcmp(argv[1], "TCP")){
+            udp_flag = 0;
+        } else{
+            printf("Wrong format\n");
+            return 0;
+        }
+        user_ip_str = argv[3];
+    }
 
     BroadcastFirstConnect();
     serv_addr.sin_port = htons(PORT);
