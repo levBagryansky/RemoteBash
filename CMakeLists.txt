@@ -22,7 +22,7 @@ target_link_libraries(PSWD pam)
 add_custom_target(run_Client_udp
         COMMAND ./Client udp)
 add_custom_target(run_Client_tcp
-        COMMAND ./Client tcp)
+        COMMAND ./Client taris3@192.168.1.153)
 
 add_custom_target(run_Server_udp
         COMMAND ./Server udp)
