@@ -16,6 +16,7 @@
 int udp_flag = 0;
 struct sockaddr_in cli_addr;
 int len = sizeof (cli_addr);
+int exit_after_distributed;
 int port = START_PORT;
 
 int Send2Client(char *buf, int sock_fd, int n);
