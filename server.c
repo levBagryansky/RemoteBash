@@ -9,12 +9,13 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-#define MAXLINE 1024
-#define PORT    1e4
+#define MAXLINE    1024
+#define START_PORT 1e4
 
 int udp_flag = 0;
 struct sockaddr_in cli_addr;
 int len = sizeof (cli_addr);
+int port = START_PORT;
 
 int Send2Client(char *buf, int sock_fd, int n);
 int Rcv(char *buf, int sock_fd);
@@ -157,7 +158,7 @@ int DistributeBroadcastServer(){
 
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
+    serv_addr.sin_port = htons(START_PORT);
 
     int a = 1;
     TRY(setsockopt(sock_fd_rcv, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a)))
@@ -173,7 +174,9 @@ int DistributeBroadcastServer(){
 
         TRY((sock_fd_snd = socket(AF_INET, SOCK_DGRAM, 0)))
         char buf_answer[MAXLINE] = "I am Bagr server";
-        TRY(sendto(sock_fd_snd, buf_answer, strlen(buf_answer), MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
+        port++;
+        printf("port = %d\n", port);
+        TRY(sendto(sock_fd_snd, &port, sizeof(port), MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
         memset(buf_answer, 0, sizeof buf_answer);
         memset(buf, 0, sizeof buf);
         close(sock_fd_snd);
@@ -199,7 +202,7 @@ int ConnectWithUser(){
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     //serv_addr.sin_addr.s_addr = inet_addr("192.168.1.153");
-    serv_addr.sin_port = htons(PORT);
+    serv_addr.sin_port = htons(port);
 
     bind(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
     printf("binded\n");
@@ -211,7 +214,7 @@ int ConnectWithUser(){
                          MSG_WAITALL, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
         write(STDOUT_FILENO, buf, n);
         char* str = "Got answer from server\n";
-        int sended = sendto(sock_fd, str, 24, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
+        int sended = sendto(sock_fd, str, strlen(str), MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr);
         printf("sended = %d\n", sended);
         if(sended == -1){
             perror("sendto error");

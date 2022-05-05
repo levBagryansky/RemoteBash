@@ -7,7 +7,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 
-#define PORT      1e4
+#define START_PORT      1e4
 #define EXIT_CODE -2
 
 #define TRY(cmd) \
@@ -17,6 +17,7 @@
     return(-1); \
   }
 
+//int port;
 struct sockaddr_in serv_addr;
 int udp_flag = 0;
 int len = sizeof (serv_addr);
@@ -44,7 +45,7 @@ int Send2Server(char *buf, int sock_fd, int n);
 int RcvAndWrite(char *buf, int sock_fd);
 int PrintServersByBroadcast(char *buf){return buf - buf;}
 int CP2Server(char *str, int n, int sock_fd);
-int BroadcastFirstConnect();
+int BroadcastFirstConnect(int *p_port);
 int DoCommunication(char* buf);
 
 // Must be
@@ -90,8 +91,9 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    BroadcastFirstConnect();
-    serv_addr.sin_port = htons(PORT);
+    int port;
+    BroadcastFirstConnect(&port);
+    serv_addr.sin_port = htons(port);
 
     if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))) {
         udp_flag++;
@@ -176,7 +178,7 @@ int CP2Server(char *str, int n, int sock_fd){
     return 0;
 }
 
-int BroadcastFirstConnect(){
+int BroadcastFirstConnect(int *p_port){
     printf("Broadcast connecting..\n");
     char buf[MAXLINE] = "BroadcastMess";
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -188,7 +190,7 @@ int BroadcastFirstConnect(){
     }
 
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
+    serv_addr.sin_port = htons(START_PORT);
     serv_addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 
     int a = 1;
@@ -199,7 +201,8 @@ int BroadcastFirstConnect(){
 
     // получаем
     socklen_t len = sizeof(serv_addr);
-    TRY(recvfrom(sock_fd, buf, sizeof(buf), MSG_WAITALL, (struct sockaddr *) &serv_addr, &len))
+    TRY(recvfrom(sock_fd, p_port, sizeof(int), MSG_WAITALL, (struct sockaddr *) &serv_addr, &len))
+    printf("port = %d\n", *p_port);
     printf("Yeah! Get answer from server: ip = %s\n", inet_ntoa(serv_addr.sin_addr));
     close(sock_fd);
     return 0;
