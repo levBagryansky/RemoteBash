@@ -21,9 +21,28 @@ struct sockaddr_in serv_addr;
 int udp_flag = 0;
 int len = sizeof (serv_addr);
 
+int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip){
+    char *at_sign = strchr(user_ip_str, '@');
+    if(at_sign){
+        for (int i = 0; i < at_sign - user_ip_str; ++i) {
+            user[i] = user_ip_str[i];
+        }
+        int num_of_at_sign = at_sign  - user_ip_str;
+        for (int i = 0; user_ip_str[i + num_of_at_sign + 1] != 0; ++i) {
+            ip[i] = user_ip_str[i + num_of_at_sign + 1];
+        }
+    } else{
+        TRY(getlogin_r(user, MAXLINE))
+        for (int i = 0; user_ip_str[i] != 0 && i < MAXLINE; ++i) {
+            ip[i] = user_ip_str[i];
+        }
+    }
+    printf("user = %s\nip = %s\n", user, ip);
+    return 0;
+}
 int Send2Server(char *buf, int sock_fd, int n);
 int RcvAndWrite(char *buf, int sock_fd);
-int PrintServersByBroadcast(char *buf);
+int PrintServersByBroadcast(char *buf){return buf - buf;}
 int CP2Server(char *str, int n, int sock_fd);
 int BroadcastFirstConnect();
 int DoCommunication(char* buf);
@@ -54,6 +73,21 @@ int main(int argc, char** argv) {
             return 0;
         }
         user_ip_str = argv[3];
+    }
+
+    char *user_str = (char *) calloc(MAXLINE, sizeof(char));
+    char *ip_str = (char *) calloc(MAXLINE, sizeof(char));
+    if(DetermineUserAndIpByStr(user_ip_str, user_str, ip_str) == -1){
+        free(user_ip_str);
+        free(ip_str);
+        exit(1);
+    }
+
+    if(user_str[0] == 0 || ip_str[0] == 0){
+        printf("Wrong user or ip\n");
+        free(user_ip_str);
+        free(ip_str);
+        return 0;
     }
 
     BroadcastFirstConnect();
