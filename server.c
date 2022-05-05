@@ -8,6 +8,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define MAXLINE    1024
 #define START_PORT 1e4
@@ -36,6 +37,23 @@ int main(int argc, char **argv){
     } else{
         printf("TCP mode\n");
     }
+
+    //if(DistributeBroadcastServer() < 0){
+    //    log_error("DistributeBroadcastServer");
+    //}
+    int distributed;
+    while (1){
+        distributed = DistributeBroadcastServer();
+        if(distributed == -1){
+            log_error("DistributeBroadcastServer()");
+            return -1;
+        }
+        TRY((forked = fork()))
+        if(forked == 0){
+            break;
+        }
+    }
+
     int pipe_get_fds[2];
     int pipe_send_fds[2];
     if(pipe(pipe_get_fds)){
@@ -45,9 +63,6 @@ int main(int argc, char **argv){
         perror("pipe_send error");
     }
 
-    if(DistributeBroadcastServer() < 0){
-        log_error("DistributeBroadcastServer");
-    }
     int acc_fd = ConnectWithUser();
     if(acc_fd < 0){
         log_error("Cannot connect with user");
@@ -77,10 +92,12 @@ int main(int argc, char **argv){
         }
 
     } else{
+
         if(DoBash(pipe_get_fds[0], pipe_send_fds[1]) < 0){
             log_error("Do Bash");
         }
     }
+
 }
 
 int Send2Client(char *buf, int sock_fd, int n){
@@ -108,9 +125,7 @@ int CP_FromClient(char *str, int sock_fd){
     char path_to[MAXLINE];
     GetNumWord(str, path_to, 2);
     int path_to_fd = open(path_to, O_WRONLY | O_TRUNC | O_CREAT, 0666);
-    char no_error = 1;
     if(path_to_fd == -1){
-        no_error = 0;
         perror("Open error");
         //Send2Client(&no_error, sock_fd, 1);
         return -1;
