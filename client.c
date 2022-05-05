@@ -209,6 +209,7 @@ int CP2Server(char *str, int n, int sock_fd){
 }
 
 int BroadcastFirstConnect(int *p_port){
+    int exit_after_distributed = 0;
     printf("Broadcast connecting..\n");
     char buf[MAXLINE] = "BroadcastMess";
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -227,7 +228,7 @@ int BroadcastFirstConnect(int *p_port){
     TRY(setsockopt(sock_fd, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a)))
     //bind(sock_fd, (struct sockaddr*) &serv_addr, sizeof (serv_addr));
 
-    TRY(sendto(sock_fd, buf, strlen(buf), MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr))
+    TRY(sendto(sock_fd, &exit_after_distributed, sizeof(exit_after_distributed), MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr))
 
     // получаем
     socklen_t len = sizeof(serv_addr);
