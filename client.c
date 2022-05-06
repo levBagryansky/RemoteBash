@@ -24,6 +24,15 @@ socklen_t serv_addr_size = sizeof (serv_addr);
 
 int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip);
 int Send2Server(char *buf, int sock_fd, int n);
+int Rcv(char *buf, int sock_fd){
+    int n;
+    if(udp_flag){
+        n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&serv_addr_size);
+    } else{
+        n = read(sock_fd, buf, MAXLINE);
+    }
+    return n;
+}
 int RcvAndWrite(char *buf, int sock_fd);
 int CP2Server(char *str, int n, int sock_fd);
 int PrintServersByBroadcast();
@@ -282,6 +291,7 @@ int DoCommunication(char* buf, char *login){
     printf("sock_fd = %d\nNow We have to be authorized\n", sock_fd);
     Send2Server(login, sock_fd, strlen(login));
     free(login);
+
     int forked = fork();
     if(forked) {
         while (1) {
