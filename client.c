@@ -20,7 +20,7 @@
 //int port;
 struct sockaddr_in serv_addr;
 int udp_flag = 0;
-int len = sizeof (serv_addr);
+socklen_t serv_addr_size = sizeof (serv_addr);
 
 int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip);
 int Send2Server(char *buf, int sock_fd, int n);
@@ -28,7 +28,7 @@ int RcvAndWrite(char *buf, int sock_fd);
 int CP2Server(char *str, int n, int sock_fd);
 int PrintServersByBroadcast();
 int BroadcastFirstConnect(int *p_port, char *ip);
-int DoCommunication(char* buf);
+int DoCommunication(char* buf, char *login);
 
 // Must be
 // ./Client [-t <UDP|TCP>] [<user>@]<IP>
@@ -76,12 +76,15 @@ int main(int argc, char** argv) {
     int port;
     BroadcastFirstConnect(&port, ip_str);
     serv_addr.sin_port = htons(port);
-
+    printf("freeing\n");
+    //free(user_str);
+    free(ip_str);
+    printf("freed");
     if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))) {
         udp_flag++;
     } else {
     }
-    DoCommunication(buf);
+    DoCommunication(buf, user_str);
 }
 
 int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip){
@@ -118,7 +121,7 @@ int Send2Server(char *buf, int sock_fd, int n){
 int RcvAndWrite(char *buf, int sock_fd){
     int n;
     if(udp_flag){
-        n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&len);
+        n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&serv_addr_size);
     } else{
         n = read(sock_fd, buf, MAXLINE);
     }
@@ -213,7 +216,6 @@ int PrintServersByBroadcast(){
 
 int BroadcastFirstConnect(int *p_port, char* ip){
     printf("Broadcast connecting..\n");
-    char buf[MAXLINE] = "BroadcastMess";
     memset(&serv_addr, 0, sizeof(serv_addr));
 
     int sock_fd;
@@ -228,7 +230,6 @@ int BroadcastFirstConnect(int *p_port, char* ip){
 
     int a = 1;
     TRY(setsockopt(sock_fd, SOL_SOCKET, SO_BROADCAST, &a, sizeof(a)))
-    //bind(sock_fd, (struct sockaddr*) &serv_addr, sizeof (serv_addr));
     int exit_after_distributed = 0;
     TRY(sendto(sock_fd, &exit_after_distributed, sizeof(exit_after_distributed), MSG_CONFIRM, (const struct sockaddr *) &serv_addr, sizeof serv_addr))
 
@@ -237,10 +238,11 @@ int BroadcastFirstConnect(int *p_port, char* ip){
     while (1) {
         printf("RECEIVING\n");
         TRY(recvfrom(sock_fd, p_port, sizeof(int), MSG_WAITALL, (struct sockaddr *) &serv_addr, &len))
-        printf("ip = %d\nserver_ip = %d", htonl(ip), serv_addr.sin_addr.s_addr);
+        //printf("ip = %d\nserver_ip = %d\n", htonl(ip), serv_addr.sin_addr.s_addr);
         if(serv_addr.sin_addr.s_addr == inet_addr(ip)){
             break;
         }
+        printf("Not equal\n");
     }
     printf("port = %d\n", *p_port);
     printf("Yeah! Get answer from server: ip = %s\n", inet_ntoa(serv_addr.sin_addr));
@@ -248,7 +250,7 @@ int BroadcastFirstConnect(int *p_port, char* ip){
     return 0;
 }
 
-int DoCommunication(char* buf){
+int DoCommunication(char* buf, char *login){
     int sock_fd;
     if(udp_flag){
         printf("UDP mode\n");
@@ -277,8 +279,9 @@ int DoCommunication(char* buf){
         }
         printf("connect_fd = %d\n", connect_fd);
     }
-    printf("sock_fd = %d\nConnected, you can start\n", sock_fd);
-
+    printf("sock_fd = %d\nNow We have to be authorized\n", sock_fd);
+    Send2Server(login, sock_fd, strlen(login));
+    free(login);
     int forked = fork();
     if(forked) {
         while (1) {
