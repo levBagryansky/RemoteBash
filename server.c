@@ -27,36 +27,7 @@ int DistributeBroadcastServer(); //С помощью бродкаста пере
 int ConnectWithUser(); //Коннектится с юзером
 int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write); //Получает сообщения и посылает их в pipe_get_fds
 int SendMessages(int pipe_read_send_fd, int acc_fd); //из pipe_send_fds посылвет строки клиенту
-int Authorize(int pipe_read_get_fd, int pipe_write_send_fd, char *login){
-    int clone_stdin = dup(STDIN_FILENO);
-    int clone_stdout = dup(STDOUT_FILENO);
-    TRY(dup2(pipe_read_get_fd, STDIN_FILENO))
-    TRY(dup2(pipe_write_send_fd, STDOUT_FILENO))
-    TRY(dup2(pipe_write_send_fd, STDERR_FILENO))
-
-    int logined;
-    for (int i = 0; i < 2; ++i) {
-        logined = login_into_user(login);
-        if(logined == 0){
-            break;
-        }
-        if(logined < 0){
-            TRY(dup2(clone_stdin, STDIN_FILENO))
-            TRY(dup2(clone_stdout, STDOUT_FILENO))
-            return -1;
-        }
-    }
-
-    if(logined != 0){
-        TRY(dup2(clone_stdin, STDIN_FILENO))
-        TRY(dup2(clone_stdout, STDOUT_FILENO))
-        return -1;
-    }
-
-    TRY(dup2(clone_stdin, STDIN_FILENO))
-    TRY(dup2(clone_stdout, STDOUT_FILENO))
-    return 0;
-}
+int Authorize(int pipe_read_get_fd, int pipe_write_send_fd, char *login);
 int DoBash(int pipe_read_get_fd, int pipe_write_send_fd);
 
 int main(int argc, char **argv){
@@ -335,6 +306,41 @@ int SendMessages(int pipe_read_send_fd, int acc_fd){
         TRY(write(STDOUT_FILENO, str, n))
         memset(str, 0, MAXLINE);
     }
+}
+
+int Authorize(int pipe_read_get_fd, int pipe_write_send_fd, char *login){
+    int clone_stdin = dup(STDIN_FILENO);
+    int clone_stdout = dup(STDOUT_FILENO);
+    TRY(dup2(pipe_read_get_fd, STDIN_FILENO))
+    TRY(dup2(pipe_write_send_fd, STDOUT_FILENO))
+    TRY(dup2(pipe_write_send_fd, STDERR_FILENO))
+
+    int logined;
+    struct passwd *info;
+    info = getpwnam(login);
+    for (int i = 0; i < 2; ++i) {
+        logined = login_into_user(login);
+        if(logined == 0){
+            break;
+        }
+        if(logined < 0){
+            TRY(dup2(clone_stdin, STDIN_FILENO))
+            TRY(dup2(clone_stdout, STDOUT_FILENO))
+            return -1;
+        }
+    }
+
+    if(logined != 0){
+        TRY(dup2(clone_stdin, STDIN_FILENO))
+        TRY(dup2(clone_stdout, STDOUT_FILENO))
+        return -1;
+    }
+
+    setgid(info -> pw_gid);
+    setuid(info -> pw_uid);
+    TRY(dup2(clone_stdin, STDIN_FILENO))
+    TRY(dup2(clone_stdout, STDOUT_FILENO))
+    return 0;
 }
 
 int DoBash(int pipe_read_get_fd, int pipe_write_send_fd){
