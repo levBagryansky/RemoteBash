@@ -14,7 +14,7 @@ add_executable(PSWD src/pswd.c)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
-target_link_libraries(Server StringFunctions Log)
+target_link_libraries(Server StringFunctions Log pam_misc pam)
 target_link_libraries(Client StringFunctions)
 target_link_libraries(PSWD pam_misc)
 target_link_libraries(PSWD pam)

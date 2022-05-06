@@ -1,4 +1,5 @@
 #include "StringFunctions.h"
+#include "Pam_Funcs.h"
 #include "Log.h"
 #include <unistd.h>
 #include <stdio.h>
@@ -26,6 +27,36 @@ int DistributeBroadcastServer(); //С помощью бродкаста пере
 int ConnectWithUser(); //Коннектится с юзером
 int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write); //Получает сообщения и посылает их в pipe_get_fds
 int SendMessages(int pipe_read_send_fd, int acc_fd); //из pipe_send_fds посылвет строки клиенту
+int Authorize(int pipe_read_get_fd, int pipe_write_send_fd, char *login){
+    int clone_stdin = dup(STDIN_FILENO);
+    int clone_stdout = dup(STDOUT_FILENO);
+    TRY(dup2(pipe_read_get_fd, STDIN_FILENO))
+    TRY(dup2(pipe_write_send_fd, STDOUT_FILENO))
+    TRY(dup2(pipe_write_send_fd, STDERR_FILENO))
+
+    int logined;
+    for (int i = 0; i < 2; ++i) {
+        logined = login_into_user(login);
+        if(logined == 0){
+            break;
+        }
+        if(logined < 0){
+            TRY(dup2(clone_stdin, STDIN_FILENO))
+            TRY(dup2(clone_stdout, STDOUT_FILENO))
+            return -1;
+        }
+    }
+
+    if(logined != 0){
+        TRY(dup2(clone_stdin, STDIN_FILENO))
+        TRY(dup2(clone_stdout, STDOUT_FILENO))
+        return -1;
+    }
+
+    TRY(dup2(clone_stdin, STDIN_FILENO))
+    TRY(dup2(clone_stdout, STDOUT_FILENO))
+    return 0;
+}
 int DoBash(int pipe_read_get_fd, int pipe_write_send_fd);
 
 int main(int argc, char **argv){
@@ -98,7 +129,15 @@ int main(int argc, char **argv){
         }
 
     } else{
-
+        char login[MAXLINE];
+        read(pipe_get_fds[0], login, MAXLINE);
+        if(Authorize(pipe_get_fds[0], pipe_send_fds[1], login) < 0){
+            printf("Authorize error\n");
+            log_error("Authorize error");
+            write(pipe_get_fds[1], "exit\n", strlen("\"exit\\n"));
+            write(pipe_send_fds[1], "exit\n", strlen("\"exit\\n"));
+            return 0;
+        }
         if(DoBash(pipe_get_fds[0], pipe_send_fds[1]) < 0){
             log_error("Do Bash");
         }
