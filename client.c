@@ -24,16 +24,57 @@ socklen_t serv_addr_size = sizeof (serv_addr);
 
 int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip);
 int Send2Server(char *buf, int sock_fd, int n);
-int Rcv(char *buf, int sock_fd){
-    int n;
-    if(udp_flag){
-        n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&serv_addr_size);
-    } else{
-        n = read(sock_fd, buf, MAXLINE);
-    }
-    return n;
-}
+int Rcv(char *buf, int sock_fd);
 int RcvAndWrite(char *buf, int sock_fd);
+int LogIn(char *login, int sock_fd){
+    char buf[MAXLINE];
+    printf("sock_fd = %d\nNow We have to be authorized\n", sock_fd);
+    Send2Server(login, sock_fd, strlen(login));
+    free(login);
+    int n;
+    for (int i = 0; i < 2; ++i) {
+        n = RcvAndWrite(buf, sock_fd);
+        if(n < 0){
+            return -1;
+        }
+        printf("Got %s", buf);
+        if(!strcmp("Login succesfull\n", buf)){
+            printf("LogIn returned 0\n");
+            return 0;
+        }
+        TRY(read(STDIN_FILENO, buf, MAXLINE))
+        Send2Server(buf, sock_fd, MAXLINE);
+    }
+    RcvAndWrite(buf, sock_fd);
+    if(strcmp("Login succesfull\n", buf)){
+        printf("returning -1\n");
+        return -1;
+    }
+    return 0;
+    int forked = fork();
+    if(forked) {
+        while (1) {
+            n = read(STDIN_FILENO, buf, MAXLINE);
+            if(Send2Server(buf, sock_fd, n) == -1){
+                printf("Send2Server error\n");
+                break;
+            }
+            if (!strcmp(buf, "exit\n")) {
+                printf("Sender exits\n");
+                break;
+            }
+            L:
+            memset(buf, 0, MAXLINE);
+        }
+    } else{
+        while (1) {
+            if(RcvAndWrite(buf, sock_fd) == EXIT_CODE){
+                break;
+            }
+        }
+    }
+    return 0;
+}
 int CP2Server(char *str, int n, int sock_fd);
 int PrintServersByBroadcast();
 int BroadcastFirstConnect(int *p_port, char *ip);
@@ -88,11 +129,12 @@ int main(int argc, char** argv) {
     printf("freeing\n");
     //free(user_str);
     free(ip_str);
-    printf("freed");
+    printf("freed\n");
     if(argc == 2 && (!strcmp(argv[1], "UDP") || !strcmp(argv[1], "udp"))) {
         udp_flag++;
     } else {
     }
+
     DoCommunication(buf, user_str);
 }
 
@@ -127,6 +169,16 @@ int Send2Server(char *buf, int sock_fd, int n){
     return ret;
 }
 
+int Rcv(char *buf, int sock_fd){
+    int n;
+    if(udp_flag){
+        n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&serv_addr_size);
+    } else{
+        n = read(sock_fd, buf, MAXLINE);
+    }
+    return n;
+}
+
 int RcvAndWrite(char *buf, int sock_fd){
     int n;
     if(udp_flag){
@@ -135,7 +187,10 @@ int RcvAndWrite(char *buf, int sock_fd){
         n = read(sock_fd, buf, MAXLINE);
     }
     if (!strcmp(buf, "exit\n")) {
-        printf("Recver exits\n");
+        return EXIT_CODE;
+    }
+    if (!strcmp(buf, "Login exit\n")) {
+        printf("Write \"exit\" to exit\n");
         return EXIT_CODE;
     }
     write(STDOUT_FILENO, buf, n);
@@ -251,7 +306,6 @@ int BroadcastFirstConnect(int *p_port, char* ip){
         if(serv_addr.sin_addr.s_addr == inet_addr(ip)){
             break;
         }
-        printf("Not equal\n");
     }
     printf("port = %d\n", *p_port);
     printf("Yeah! Get answer from server: ip = %s\n", inet_ntoa(serv_addr.sin_addr));
@@ -291,11 +345,11 @@ int DoCommunication(char* buf, char *login){
     printf("sock_fd = %d\nNow We have to be authorized\n", sock_fd);
     Send2Server(login, sock_fd, strlen(login));
     free(login);
-
+    int n;
     int forked = fork();
     if(forked) {
         while (1) {
-            int n = read(STDIN_FILENO, buf, MAXLINE);
+            n = read(STDIN_FILENO, buf, MAXLINE);
             if(CP_CommandDetected(buf)){
                 CP2Server(buf, n, sock_fd);
                 printf("You can continue\n");
@@ -306,7 +360,6 @@ int DoCommunication(char* buf, char *login){
                 break;
             }
             if (!strcmp(buf, "exit\n")) {
-                printf("Sender exits\n");
                 break;
             }
             L:
