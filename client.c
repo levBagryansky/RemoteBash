@@ -26,55 +26,6 @@ int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip);
 int Send2Server(char *buf, int sock_fd, int n);
 int Rcv(char *buf, int sock_fd);
 int RcvAndWrite(char *buf, int sock_fd);
-int LogIn(char *login, int sock_fd){
-    char buf[MAXLINE];
-    printf("sock_fd = %d\nNow We have to be authorized\n", sock_fd);
-    Send2Server(login, sock_fd, strlen(login));
-    free(login);
-    int n;
-    for (int i = 0; i < 2; ++i) {
-        n = RcvAndWrite(buf, sock_fd);
-        if(n < 0){
-            return -1;
-        }
-        printf("Got %s", buf);
-        if(!strcmp("Login succesfull\n", buf)){
-            printf("LogIn returned 0\n");
-            return 0;
-        }
-        TRY(read(STDIN_FILENO, buf, MAXLINE))
-        Send2Server(buf, sock_fd, MAXLINE);
-    }
-    RcvAndWrite(buf, sock_fd);
-    if(strcmp("Login succesfull\n", buf)){
-        printf("returning -1\n");
-        return -1;
-    }
-    return 0;
-    int forked = fork();
-    if(forked) {
-        while (1) {
-            n = read(STDIN_FILENO, buf, MAXLINE);
-            if(Send2Server(buf, sock_fd, n) == -1){
-                printf("Send2Server error\n");
-                break;
-            }
-            if (!strcmp(buf, "exit\n")) {
-                printf("Sender exits\n");
-                break;
-            }
-            L:
-            memset(buf, 0, MAXLINE);
-        }
-    } else{
-        while (1) {
-            if(RcvAndWrite(buf, sock_fd) == EXIT_CODE){
-                break;
-            }
-        }
-    }
-    return 0;
-}
 int CP2Server(char *str, int n, int sock_fd);
 int PrintServersByBroadcast();
 int BroadcastFirstConnect(int *p_port, char *ip);
