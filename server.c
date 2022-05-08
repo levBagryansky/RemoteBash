@@ -105,8 +105,7 @@ int main(int argc, char **argv){
         if(Authorize(pipe_get_fds[0], pipe_send_fds[1], login) < 0){
             printf("Authorize error\n");
             log_error("Authorize error");
-            write(pipe_get_fds[1], "exit\n", strlen("\"exit\\n"));
-            write(pipe_send_fds[1], "exit\n", strlen("\"exit\\n"));
+            write(pipe_send_fds[1], "Login exit\n", strlen("Login exit\n"));
             return 0;
         }
         if(DoBash(pipe_get_fds[0], pipe_send_fds[1]) < 0){
@@ -174,7 +173,7 @@ int CP_FromClient(char *str, int sock_fd){
 //С помощью бродкаста передавать данные сервера
 int DistributeBroadcastServer(){
     int sock_fd_rcv, sock_fd_snd;
-    struct sockaddr_in serv_addr, cli_addr;
+    struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     memset(&cli_addr, 0, sizeof(cli_addr));
 
@@ -249,7 +248,7 @@ int ConnectWithUser(){
     printf("listened\n");
     int acc_fd = accept(sock_fd, NULL, NULL);
     printf("accepted\n");
-    log_info("Connected with user\n");
+    log_info("Connected with user, ip = %s\n", inet_ntoa(cli_addr.sin_addr));
     return acc_fd;
 }
 
@@ -336,6 +335,7 @@ int Authorize(int pipe_read_get_fd, int pipe_write_send_fd, char *login){
         return -1;
     }
 
+    log_info("user \"%s\" logged in\n", login);
     setgid(info -> pw_gid);
     setuid(info -> pw_uid);
     TRY(dup2(clone_stdin, STDIN_FILENO))
