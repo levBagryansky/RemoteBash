@@ -6,6 +6,8 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <time.h>
 
 #define START_PORT      1e4
 #define EXIT_CODE -2
@@ -21,6 +23,7 @@
 struct sockaddr_in serv_addr;
 int udp_flag = 0;
 socklen_t serv_addr_size = sizeof (serv_addr);
+int sock_fd_For_handler;
 
 int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip);
 int Send2Server(char *buf, int sock_fd, int n);
@@ -29,7 +32,40 @@ int RcvAndWrite(char *buf, int sock_fd);
 int CP2Server(char *str, int n, int sock_fd);
 int PrintServersByBroadcast();
 int BroadcastFirstConnect(int *p_port, char *ip);
+int SetConnection();
+int GetKeyByDiffieHellman(int sock_fd){
+    int p = 19961; //prime number
+    int g = 7;
+    srand(time(NULL));
+    uint a = rand();
+    uint A = 1;
+    for (uint i = 0; i < a; ++i) {
+        A = A * g % p;
+    }
+    printf("A = %d\n", A);
+
+    int arr[3] = {p, g, A};
+    Send2Server((char*) arr, sock_fd, sizeof(arr));
+    int B;
+    Rcv((char *)&B, sock_fd);
+    printf("B = %d\n", B);
+
+    int key = 1;
+    for (uint i = 0; i < a; ++i) {
+        key = key * B % p;
+    }
+    return key;
+}
+int SetSslWithServer(int sock_fd);
 int DoCommunication(char* buf, char *login);
+void sigint_handler(){
+    if(sock_fd_For_handler == -1) {
+        return;
+    }
+    char sig_c = SIGINT;
+    Send2Server(&sig_c, sock_fd_For_handler, sizeof(sig_c));
+    printf("Sent sigint\n");
+}
 
 // Must be
 // ./Client [-t <UDP|TCP>] [<user>@]<IP>
@@ -264,7 +300,8 @@ int BroadcastFirstConnect(int *p_port, char* ip){
     return 0;
 }
 
-int DoCommunication(char* buf, char *login){
+int SetConnection(){
+    char buf[MAXLINE] = {0};
     int sock_fd;
     if(udp_flag){
         printf("UDP mode\n");
@@ -289,16 +326,36 @@ int DoCommunication(char* buf, char *login){
         int connect_fd = connect(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         if (connect_fd < 0) {
             perror("connect error");
-            return 1;
+            return -1;
         }
         printf("connect_fd = %d\n", connect_fd);
     }
-    printf("sock_fd = %d\nNow We have to be authorized\n", sock_fd);
+    return sock_fd;
+}
+
+int DoCommunication(char* buf, char *login){
+    int sock_fd = SetConnection();
+    if(sock_fd == -1){
+        return 0;
+    }
+
+    printf("sock_fd = %d\nNow We have to get key\n", sock_fd);
+    int key = GetKeyByDiffieHellman(sock_fd);
+    printf("key = %d\nNow We have to be authorized\n", key);
     Send2Server(login, sock_fd, strlen(login));
     free(login);
     int n;
+    /*
+    struct sigaction act_sigint;
+    memset(&act_sigint, 0, sizeof(act_sigint));
+    sigset_t sigset;
+    sigaddset(&sigset, SIGINT);
+    act_sigint.sa_mask = sigset;
+     */
     int forked = fork();
     if(forked) {
+        sock_fd_For_handler = sock_fd;
+        signal(SIGINT, sigint_handler);
         while (1) {
             n = read(STDIN_FILENO, buf, MAXLINE);
             if(CP_CommandDetected(buf)){
@@ -317,6 +374,8 @@ int DoCommunication(char* buf, char *login){
             memset(buf, 0, MAXLINE);
         }
     } else{
+        sock_fd_For_handler = -1;
+        signal(SIGINT, sigint_handler);
         while (1) {
             if(RcvAndWrite(buf, sock_fd) == EXIT_CODE){
                 break;
