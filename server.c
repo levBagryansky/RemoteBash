@@ -25,7 +25,30 @@ int Rcv(char *buf, int sock_fd);
 int CP_FromClient(char *str, int sock_fd);
 int DistributeBroadcastServer(); //С помощью бродкаста передавать данные сервера
 int ConnectWithUser(); //Коннектится с юзером
-int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write); //Получает сообщения и посылает их в pipe_get_fds
+int GetKeyByDiffieHellma(int sock_fd){
+    // Bob
+    int arr[3];
+    Rcv((char*) arr, sock_fd);
+    int p = arr[0];
+    int g = arr[1];
+    int A = arr[2];
+    printf("p = %d, g = %d, A = %d\n", p, g, A);
+    srand(time(NULL));
+    uint b = rand();
+    uint B = 1;
+    for (uint i = 0; i < b; ++i) {
+        B = B * g % p;
+    }
+    Send2Client((char *) &B, sock_fd, sizeof (B));
+    printf("B = %d\n", B);
+    int key = 1;
+    for (uint i = 0; i < b; ++i) {
+        key = key * A % p;
+    }
+    return key;
+}
+int SetSslWithClient(int acc_fd);
+int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write, int bash_pid); //Получает сообщения и посылает их в pipe_get_fds
 int SendMessages(int pipe_read_send_fd, int acc_fd); //из pipe_send_fds посылвет строки клиенту
 int Authorize(int pipe_read_get_fd, int pipe_write_send_fd, char *login);
 int DoBash(int pipe_read_get_fd, int pipe_write_send_fd);
@@ -75,15 +98,35 @@ int main(int argc, char **argv){
     if(acc_fd < 0){
         log_error("Cannot connect with user");
     }
+    printf("Getting key..\n");
+    int key = GetKeyByDiffieHellma(acc_fd);
+    printf("key = %d\n", key);
     if((forked = fork()) < 0){
         log_perror("Fork error");
         exit(1);
     }
     if(!forked){
+        char login[MAXLINE];
+        read(pipe_get_fds[0], login, MAXLINE);
+        if(Authorize(pipe_get_fds[0], pipe_send_fds[1], login) < 0){
+            printf("Authorize error\n");
+            log_error("Authorize error");
+            write(pipe_send_fds[1], "Login exit\n", strlen("Login exit\n"));
+            return 0;
+        }
+        printf("bash pid = %d\n", getpid());
+        if(DoBash(pipe_get_fds[0], pipe_send_fds[1]) < 0){
+            log_error("Do Bash");
+        }
+        printf("killed\n");
+
+    } else{
+
         if(acc_fd < 0){
             perror("ConnectWithUser == -1");
             exit(1);
         }
+        int bash_pid = forked;
         if((forked = fork()) < 0){
             log_perror("Fork error");
             exit(1);
@@ -93,23 +136,10 @@ int main(int argc, char **argv){
                 log_error("SendMessage");
             }
         } else{
-            if(GetMessages(pipe_get_fds[1], acc_fd, pipe_send_fds[1]) < 0){
+            if(GetMessages(pipe_get_fds[1], acc_fd, pipe_send_fds[1], bash_pid) < 0){
                 printf("GetMessage returned -1");
                 log_error("GetMessage");
             }
-        }
-
-    } else{
-        char login[MAXLINE];
-        read(pipe_get_fds[0], login, MAXLINE);
-        if(Authorize(pipe_get_fds[0], pipe_send_fds[1], login) < 0){
-            printf("Authorize error\n");
-            log_error("Authorize error");
-            write(pipe_send_fds[1], "Login exit\n", strlen("Login exit\n"));
-            return 0;
-        }
-        if(DoBash(pipe_get_fds[0], pipe_send_fds[1]) < 0){
-            log_error("Do Bash");
         }
     }
 
@@ -253,7 +283,7 @@ int ConnectWithUser(){
 }
 
 //Получает сообщения и посылает их в pipe_get_fds
-int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
+int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write, int bash_pid) {
     char buf[1024] = {0};
     while (1){
         int n = Rcv(buf, acc_fd);
@@ -267,6 +297,13 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write) {
             write(STDOUT_FILENO, buf, n);
             printf("GetMessages Exits\n");
             log_info("Exited\n");
+            return 0;
+        }
+        if(n == 1 && *buf == SIGINT){
+            char ctrl_c = 67;
+            write(pipe_write_fd, &ctrl_c, 1);
+            //kill(bash_pid, SIGINT);
+            //printf("Killed sigint to bash with pid %d\n", bash_pid);
             return 0;
         }
         write(STDOUT_FILENO, buf, n);
