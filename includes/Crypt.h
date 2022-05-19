@@ -1,5 +1,5 @@
-#ifndef INCLUDES_CRIPT_H
-#define INCLUDES_CRIPT_H
+#ifndef INCLUDES_CRYPT_H
+#define INCLUDES_CRYPT_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -116,4 +116,4 @@ int decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key,
     return plaintext_len;
 }
 
-#endif //INCLUDES_CRIPT_H
+#endif //INCLUDES_CRYPT_H

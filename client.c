@@ -1,5 +1,5 @@
 #include "StringFunctions.h"
-#include "Cript.h"
+#include "Crypt.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
