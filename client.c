@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     }
 
     int port;
-    BroadcastFirstConnect(&port, ip_str);
+    //BroadcastFirstConnect(&port, ip_str);
     serv_addr.sin_port = htons(port);
     printf("freeing\n");
     //free(user_str);
