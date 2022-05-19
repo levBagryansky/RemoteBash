@@ -1,4 +1,5 @@
 #include "StringFunctions.h"
+#include "Cript.h"
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -9,7 +10,7 @@
 #include <signal.h>
 #include <time.h>
 
-#define START_PORT      1e4
+#define START_PORT      1e4+43
 #define EXIT_CODE -2
 
 #define TRY(cmd) \
@@ -37,7 +38,7 @@ int GetKeyByDiffieHellman(int sock_fd){
     int p = 19961; //prime number
     int g = 7;
     srand(time(NULL));
-    uint a = rand();
+    uint a = rand() % 10000;
     uint A = 1;
     for (uint i = 0; i < a; ++i) {
         A = A * g % p;
@@ -72,8 +73,8 @@ void sigint_handler(){
 // ./Client —broadcast
 int main(int argc, char** argv) {
     char buf[MAXLINE] = {0};
-    if(argc < 2 || argc > 3){
-        printf("Wring format\n");
+    if(argc < 2 || argc > 4){
+        printf("Wrong format\n");
         return 0;
     }
 
@@ -84,9 +85,10 @@ int main(int argc, char** argv) {
 
     char *user_ip_str = argv[1];
     if(!strcmp(argv[1], "-t")){
-        if(!strcmp(argv[1], "udp") || !strcmp(argv[1], "UDP")){
+        if(!strcmp(argv[2], "udp") || !strcmp(argv[2], "UDP")){
+            printf("UDP mode\n");
             udp_flag++;
-        } else if(!strcmp(argv[1], "tcp") || !strcmp(argv[1], "TCP")){
+        } else if(!strcmp(argv[2], "tcp") || !strcmp(argv[2], "TCP")){
             udp_flag = 0;
         } else{
             printf("Wrong format\n");
@@ -163,6 +165,7 @@ int Rcv(char *buf, int sock_fd){
     } else{
         n = read(sock_fd, buf, MAXLINE);
     }
+    printf("Rcv: %s", buf);
     return n;
 }
 
@@ -345,19 +348,12 @@ int DoCommunication(char* buf, char *login){
     Send2Server(login, sock_fd, strlen(login));
     free(login);
     int n;
-    /*
-    struct sigaction act_sigint;
-    memset(&act_sigint, 0, sizeof(act_sigint));
-    sigset_t sigset;
-    sigaddset(&sigset, SIGINT);
-    act_sigint.sa_mask = sigset;
-     */
+
     int forked = fork();
     if(forked) {
-        sock_fd_For_handler = sock_fd;
-        signal(SIGINT, sigint_handler);
         while (1) {
             n = read(STDIN_FILENO, buf, MAXLINE);
+
             if(CP_CommandDetected(buf)){
                 CP2Server(buf, n, sock_fd);
                 printf("You can continue\n");

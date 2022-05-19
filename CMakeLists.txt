@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(RemoteBash)
 
 set(CMAKE_C_FLAGS "-Wall -Wextra -pthread")
+find_package(OpenSSL REQUIRED)
 add_compile_options(-lpam -lpam_misc)
 include_directories(includes)
 
@@ -14,8 +15,8 @@ add_executable(PSWD src/pswd.c)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
 
-target_link_libraries(Server StringFunctions Log pam_misc pam)
-target_link_libraries(Client StringFunctions)
+target_link_libraries(Server StringFunctions Log pam_misc pam OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(Client StringFunctions OpenSSL::SSL OpenSSL::Crypto)
 target_link_libraries(PSWD pam_misc)
 target_link_libraries(PSWD pam)
 
