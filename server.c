@@ -34,7 +34,7 @@ int GetKeyByDiffieHellma(int sock_fd){
     int A = arr[2];
     printf("p = %d, g = %d, A = %d\n", p, g, A);
     srand(time(NULL));
-    uint b = rand();
+    uint b = rand() % 10000;
     uint B = 1;
     for (uint i = 0; i < b; ++i) {
         B = B * g % p;
