@@ -11,13 +11,38 @@
 
 #define TOSTRING(x) #x
 
+
+
 void handleErrors(void);
 int encrypt(unsigned char *plaintext, int plaintext_len, unsigned char *key,
             unsigned char *iv, unsigned char *ciphertext);
 int decrypt(unsigned char *ciphertext, int ciphertext_len, unsigned char *key,
             unsigned char *iv, unsigned char *plaintext);
 
+void Make_keys(int K1, int K2, char * key, char * IV){
+    char A[MAXLINE] = {0};
+    char B[MAXLINE] = {0};
 
+    sprintf(A, "%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d", K1, K2, K1, K2, K1, K2, K1, K2, K1, K2, K1, K2, K1, K2, K1, K2);
+    sprintf(B, "%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d%d", K2, K1, K2, K1, K2, K1, K2, K1, K2, K1, K2, K1, K2, K1, K2, K1);
+
+    //printf("A: %s\n", A);
+    //printf("B: %s\n", B);
+
+    strcat(key, A);
+    strcat(IV, B);
+
+    for (size_t i = 32; i < MAXLINE; i++){
+        key[i] = '\0';
+    }
+
+    for (size_t i = 16; i < MAXLINE; i++){
+        IV[i] = '\0';
+    }
+
+    printf("key: %s\n", key);
+    printf("IV: %s\n", IV);
+}
 
 void handleErrors(void)
 {

@@ -10,7 +10,7 @@
 #include <signal.h>
 #include <time.h>
 
-#define START_PORT      1e4+43
+#define START_PORT      1e4
 #define EXIT_CODE -2
 
 #define TRY(cmd) \
@@ -25,6 +25,7 @@ struct sockaddr_in serv_addr;
 int udp_flag = 0;
 socklen_t serv_addr_size = sizeof (serv_addr);
 int sock_fd_For_handler;
+unsigned char glob_key[MAXLINE];
 
 int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip);
 int Send2Server(char *buf, int sock_fd, int n);
@@ -34,30 +35,7 @@ int CP2Server(char *str, int n, int sock_fd);
 int PrintServersByBroadcast();
 int BroadcastFirstConnect(int *p_port, char *ip);
 int SetConnection();
-int GetKeyByDiffieHellman(int sock_fd){
-    int p = 19961; //prime number
-    int g = 7;
-    srand(time(NULL));
-    uint a = rand() % 10000;
-    uint A = 1;
-    for (uint i = 0; i < a; ++i) {
-        A = A * g % p;
-    }
-    printf("A = %d\n", A);
-
-    int arr[3] = {p, g, A};
-    Send2Server((char*) arr, sock_fd, sizeof(arr));
-    int B;
-    Rcv((char *)&B, sock_fd);
-    printf("B = %d\n", B);
-
-    int key = 1;
-    for (uint i = 0; i < a; ++i) {
-        key = key * B % p;
-    }
-    return key;
-}
-int SetSslWithServer(int sock_fd);
+int GetKeyByDiffieHellman(int sock_fd);
 int DoCommunication(char* buf, char *login);
 void sigint_handler(){
     if(sock_fd_For_handler == -1) {
@@ -112,9 +90,10 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    int port;
     //BroadcastFirstConnect(&port, ip_str);
-    serv_addr.sin_port = htons(port);
+    serv_addr.sin_port = htons(START_PORT);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_addr.s_addr = inet_addr(ip_str);
     printf("freeing\n");
     //free(user_str);
     free(ip_str);
@@ -165,7 +144,7 @@ int Rcv(char *buf, int sock_fd){
     } else{
         n = read(sock_fd, buf, MAXLINE);
     }
-    printf("Rcv: %s", buf);
+    //printf("Rcv: %s", buf);
     return n;
 }
 
@@ -176,14 +155,16 @@ int RcvAndWrite(char *buf, int sock_fd){
     } else{
         n = read(sock_fd, buf, MAXLINE);
     }
-    if (!strcmp(buf, "exit\n")) {
+    char decrypt_byf[MAXLINE];
+    decrypt(buf, n, glob_key, glob_key, decrypt_byf);
+    if (!strcmp(decrypt_byf, "exit\n")) {
         return EXIT_CODE;
     }
-    if (!strcmp(buf, "Login exit\n")) {
+    if (!strcmp(decrypt_byf, "Login exit\n")) {
         printf("Write \"exit\" to exit\n");
         return EXIT_CODE;
     }
-    write(STDOUT_FILENO, buf, n);
+    write(STDOUT_FILENO, decrypt_byf, n);
     memset(buf, 0, MAXLINE);
     return n;
 }
@@ -336,6 +317,30 @@ int SetConnection(){
     return sock_fd;
 }
 
+int GetKeyByDiffieHellman(int sock_fd){
+    int p = 19961; //prime number
+    int g = 7;
+    srand(time(NULL));
+    uint a = rand() % 10000;
+    uint A = 1;
+    for (uint i = 0; i < a; ++i) {
+        A = A * g % p;
+    }
+    printf("A = %d\n", A);
+
+    int arr[3] = {p, g, A};
+    Send2Server((char*) arr, sock_fd, sizeof(arr));
+    int B;
+    Rcv((char *)&B, sock_fd);
+    printf("B = %d\n", B);
+
+    int key = 1;
+    for (uint i = 0; i < a; ++i) {
+        key = key * B % p;
+    }
+    return key;
+}
+
 int DoCommunication(char* buf, char *login){
     int sock_fd = SetConnection();
     if(sock_fd == -1){
@@ -343,8 +348,13 @@ int DoCommunication(char* buf, char *login){
     }
 
     printf("sock_fd = %d\nNow We have to get key\n", sock_fd);
-    int key = GetKeyByDiffieHellman(sock_fd);
-    printf("key = %d\nNow We have to be authorized\n", key);
+    for (int i = 0; i < 8; ++i) {
+        unsigned char c = GetKeyByDiffieHellman(sock_fd) % 256;
+        for (int j = 0; j < MAXLINE / 8; ++j) {
+            glob_key[i * (MAXLINE / 8) + j] = c;
+        }
+    }
+    printf("key = %s\nNow We have to be authorized\n", glob_key);
     Send2Server(login, sock_fd, strlen(login));
     free(login);
     int n;
@@ -359,7 +369,10 @@ int DoCommunication(char* buf, char *login){
                 printf("You can continue\n");
                 goto L;
             }
-            if(Send2Server(buf, sock_fd, n) == -1){
+
+            char encrypt_buf[MAXLINE] = {0};
+            encrypt(buf, n, glob_key, glob_key, encrypt_buf);
+            if(Send2Server(encrypt_buf, sock_fd, n) == -1){
                 printf("Send2Server error\n");
                 break;
             }
