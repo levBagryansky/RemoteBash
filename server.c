@@ -21,6 +21,7 @@ int len = sizeof (cli_addr);
 int exit_after_distributed;
 int port = START_PORT;
 unsigned char glob_key[MAXLINE];
+unsigned char IV[MAXLINE];
 
 int Send2Client(char *buf, int sock_fd, int n);
 int Rcv(char *buf, int sock_fd);
@@ -35,8 +36,8 @@ int GetKeyByDiffieHellma(int sock_fd){
     int g = arr[1];
     int A = arr[2];
     printf("p = %d, g = %d, A = %d\n", p, g, A);
-    srand(time(NULL));
-    uint b = rand() % 10000;
+    uint b = rand() % 100000;
+    printf("randed %ud", b);
     uint B = 1;
     for (uint i = 0; i < b; ++i) {
         B = B * g % p;
@@ -68,7 +69,6 @@ int main(int argc, char **argv){
     //if(DistributeBroadcastServer() < 0){
     //    log_error("DistributeBroadcastServer");
     //}
-    int distributed;
 
     log_info("Started work with client\n");
     int pipe_get_fds[2];
@@ -85,12 +85,10 @@ int main(int argc, char **argv){
         log_error("Cannot connect with user");
     }
     printf("Getting key..\n");
-    for (int i = 0; i < 8; ++i) {
-        unsigned char c = GetKeyByDiffieHellma(acc_fd) % 256;
-        for (int j = 0; j < MAXLINE / 8; ++j) {
-            glob_key[i * (MAXLINE / 8) + j] = c;
-        }
-    }
+    srand(time(NULL));
+    int key1 = GetKeyByDiffieHellma(acc_fd);
+    int key2 = GetKeyByDiffieHellma(acc_fd);
+    Make_keys(key1, key2, (char*)glob_key, (char*)IV);
     //printf("key = %s\n", glob_key);
     if((forked = fork()) < 0){
         log_perror("Fork error");
@@ -98,7 +96,7 @@ int main(int argc, char **argv){
     }
     if(!forked){
         char login[MAXLINE];
-        read(pipe_get_fds[0], login, MAXLINE);
+        /*read(pipe_get_fds[0], login, MAXLINE);
         if(Authorize(pipe_get_fds[0], pipe_send_fds[1], login) < 0){
             printf("Authorize error\n");
             log_error("Authorize error");
@@ -106,6 +104,7 @@ int main(int argc, char **argv){
             return 0;
         }
         printf("bash pid = %d\n", getpid());
+         */
         if(DoBash(pipe_get_fds[0], pipe_send_fds[1]) < 0){
             log_error("Do Bash");
         }
@@ -275,17 +274,34 @@ int ConnectWithUser(){
 
 //Получает сообщения и посылает их в pipe_get_fds
 int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write, int bash_pid) {
-    char encrypt_buf[MAXLINE] = {0};
-    char buf[MAXLINE] = {0};
+    unsigned char encrypt_buf[MAXLINE] = {0};
+    unsigned char buf[MAXLINE] = {0};
     while (1){
-        int n = Rcv(encrypt_buf, acc_fd);
-        decrypt(encrypt_buf, n, glob_key, glob_key, buf);
+        int n = Rcv((char*)encrypt_buf, acc_fd);
+        printf("recved: %s\nn = %d\n", encrypt_buf, n);
+        decrypt(encrypt_buf, n, glob_key, IV, buf);
+
+        for (size_t i = 0; i < strlen((char*)buf); i++){
+            printf("%zu - (%d) %c\n", i, buf[i], buf[i]);
+        }
+
+        char * space = strchr((char*)buf, '\n');
+        int true_len = space - (char*)buf + 1;
+
+        for (size_t i = true_len; i < strlen(buf); i++){
+            buf[i] = '\0';
+        }
+
+        for (size_t i = 0; i < strlen((char*)buf); i++){
+            printf("%zu - (%d) %c\n", i, buf[i], buf[i]);
+        }
+
         if(n < 0){
             log_perror("Rcv error");
             return -1;
         }
-        if(!strcmp(buf, "exit\n")){
-            if(write(pipe_write_fd, buf, n) < 0 || write(pipe_send_write, buf, n) < 0)
+        if(!strcmp((char*)buf, "exit\n")){
+            if(write(pipe_write_fd, buf, true_len) < 0 || write(pipe_send_write, buf, n) < 0)
                 log_perror("exit write error");
             write(STDOUT_FILENO, buf, n);
             printf("GetMessages Exits\n");
@@ -299,13 +315,14 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write, int bash_pid
             //printf("Killed sigint to bash with pid %d\n", bash_pid);
             return 0;
         }
-        write(STDOUT_FILENO, buf, n);
-        if(CP_CommandDetected(buf)){
-            if(CP_FromClient(buf, acc_fd) < 0) {
+        printf("buf = %s\n", buf);
+        write(STDOUT_FILENO, buf, true_len);
+        if(CP_CommandDetected((char*)buf)){
+            if(CP_FromClient((char*)buf, acc_fd) < 0) {
                 log_error("CP_FromClient error");
             }
         }else {
-            if(write(pipe_write_fd, buf, n) < 0){
+            if(write(pipe_write_fd, buf, true_len) < 0){
                 log_perror("Write error");
             }
         }
@@ -325,18 +342,20 @@ int SendMessages(int pipe_read_send_fd, int acc_fd){
             log_perror("read error");
             perror("read error");
         }
-        encrypt(str, n, glob_key, glob_key, encrypt_buf);
+        int siph_n = encrypt((unsigned char *)str, n, glob_key, IV, (unsigned char*)encrypt_buf);
         if(udp_flag){
-            TRY(sendto(acc_fd, encrypt_buf, n, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
+            TRY(sendto(acc_fd, encrypt_buf, siph_n, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
         }else {
-            TRY(write(acc_fd, encrypt_buf, n))
+            TRY(write(acc_fd, encrypt_buf, siph_n))
         }
         if(!strcmp(str, "exit\n")){
             printf("SendMessages Exits\n");
             return 0;
         }
+        printf("Send %s\n", str);
         TRY(write(STDOUT_FILENO, str, n))
         memset(str, 0, MAXLINE);
+        memset(encrypt_buf, 0, MAXLINE);
     }
 }
 
