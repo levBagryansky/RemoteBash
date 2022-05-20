@@ -1,6 +1,7 @@
 #include "StringFunctions.h"
 #include "Pam_Funcs.h"
 #include "Log.h"
+#include "Crypt.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -19,6 +20,7 @@ struct sockaddr_in cli_addr;
 int len = sizeof (cli_addr);
 int exit_after_distributed;
 int port = START_PORT;
+unsigned char glob_key[MAXLINE];
 
 int Send2Client(char *buf, int sock_fd, int n);
 int Rcv(char *buf, int sock_fd);
@@ -47,7 +49,6 @@ int GetKeyByDiffieHellma(int sock_fd){
     }
     return key;
 }
-int SetSslWithClient(int acc_fd);
 int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write, int bash_pid); //Получает сообщения и посылает их в pipe_get_fds
 int SendMessages(int pipe_read_send_fd, int acc_fd); //из pipe_send_fds посылвет строки клиенту
 int Authorize(int pipe_read_get_fd, int pipe_write_send_fd, char *login);
@@ -68,21 +69,6 @@ int main(int argc, char **argv){
     //    log_error("DistributeBroadcastServer");
     //}
     int distributed;
-    while (1){
-        distributed = DistributeBroadcastServer();
-        printf("exit_after_distributed = %d\n", exit_after_distributed);
-        if(distributed == -1){
-            log_error("DistributeBroadcastServer()");
-            return -1;
-        }
-        TRY((forked = fork()))
-        if(forked == 0){
-            if(exit_after_distributed){
-                return 0;
-            }
-            break;
-        }
-    }
 
     log_info("Started work with client\n");
     int pipe_get_fds[2];
@@ -99,8 +85,13 @@ int main(int argc, char **argv){
         log_error("Cannot connect with user");
     }
     printf("Getting key..\n");
-    int key = GetKeyByDiffieHellma(acc_fd);
-    printf("key = %d\n", key);
+    for (int i = 0; i < 8; ++i) {
+        unsigned char c = GetKeyByDiffieHellma(acc_fd) % 256;
+        for (int j = 0; j < MAXLINE / 8; ++j) {
+            glob_key[i * (MAXLINE / 8) + j] = c;
+        }
+    }
+    //printf("key = %s\n", glob_key);
     if((forked = fork()) < 0){
         log_perror("Fork error");
         exit(1);
@@ -255,7 +246,7 @@ int ConnectWithUser(){
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     //serv_addr.sin_addr.s_addr = inet_addr("192.168.1.153");
-    serv_addr.sin_port = htons(port);
+    serv_addr.sin_port = htons(START_PORT);
 
     bind(sock_fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
     printf("binded\n");
@@ -284,9 +275,11 @@ int ConnectWithUser(){
 
 //Получает сообщения и посылает их в pipe_get_fds
 int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write, int bash_pid) {
-    char buf[1024] = {0};
+    char encrypt_buf[MAXLINE] = {0};
+    char buf[MAXLINE] = {0};
     while (1){
-        int n = Rcv(buf, acc_fd);
+        int n = Rcv(encrypt_buf, acc_fd);
+        decrypt(encrypt_buf, n, glob_key, glob_key, buf);
         if(n < 0){
             log_perror("Rcv error");
             return -1;
@@ -317,6 +310,7 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write, int bash_pid
             }
         }
         memset(buf, 0, n);
+        memset(encrypt_buf, 0, n);
 
     }
 }
@@ -324,16 +318,18 @@ int GetMessages(int pipe_write_fd, int acc_fd, int pipe_send_write, int bash_pid
 //из pipe_send_fds посылвет строки клиенту
 int SendMessages(int pipe_read_send_fd, int acc_fd){
     char str[MAXLINE];
+    char encrypt_buf[MAXLINE];
     while (1) {
         int n = read(pipe_read_send_fd, str, MAXLINE);
         if(n < 0){
             log_perror("read error");
             perror("read error");
         }
+        encrypt(str, n, glob_key, glob_key, encrypt_buf);
         if(udp_flag){
-            TRY(sendto(acc_fd, str, n, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
+            TRY(sendto(acc_fd, encrypt_buf, n, MSG_CONFIRM, (const struct sockaddr *) &cli_addr, sizeof cli_addr))
         }else {
-            TRY(write(acc_fd, str, n))
+            TRY(write(acc_fd, encrypt_buf, n))
         }
         if(!strcmp(str, "exit\n")){
             printf("SendMessages Exits\n");
