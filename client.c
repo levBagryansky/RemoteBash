@@ -26,6 +26,7 @@ int udp_flag = 0;
 socklen_t serv_addr_size = sizeof (serv_addr);
 int sock_fd_For_handler;
 unsigned char glob_key[MAXLINE];
+unsigned char IV[MAXLINE];
 
 int DetermineUserAndIpByStr(char *user_ip_str, char *user, char *ip);
 int Send2Server(char *buf, int sock_fd, int n);
@@ -50,6 +51,7 @@ void sigint_handler(){
 // ./Client [-t <UDP|TCP>] [<user>@]<IP>
 // ./Client —broadcast
 int main(int argc, char** argv) {
+    srand(time(NULL));
     char buf[MAXLINE] = {0};
     if(argc < 2 || argc > 4){
         printf("Wrong format\n");
@@ -149,23 +151,24 @@ int Rcv(char *buf, int sock_fd){
 }
 
 int RcvAndWrite(char *buf, int sock_fd){
+    memset(buf, 0, MAXLINE);
     int n;
     if(udp_flag){
         n = recvfrom(sock_fd, buf, MAXLINE, MSG_WAITALL, (struct sockaddr *) &serv_addr, (socklen_t *)&serv_addr_size);
     } else{
         n = read(sock_fd, buf, MAXLINE);
     }
-    char decrypt_byf[MAXLINE];
-    decrypt(buf, n, glob_key, glob_key, decrypt_byf);
-    if (!strcmp(decrypt_byf, "exit\n")) {
+    unsigned char decrypt_byf[MAXLINE] = {0};
+    decrypt((unsigned char*)buf, n, glob_key, IV, decrypt_byf);
+    if (!strcmp((char*)decrypt_byf, "exit\n")) {
         return EXIT_CODE;
     }
-    if (!strcmp(decrypt_byf, "Login exit\n")) {
+    if (!strcmp((char*)decrypt_byf, "Login exit\n")) {
         printf("Write \"exit\" to exit\n");
         return EXIT_CODE;
     }
     write(STDOUT_FILENO, decrypt_byf, n);
-    memset(buf, 0, MAXLINE);
+    memset(decrypt_byf, 0, MAXLINE);
     return n;
 }
 
@@ -320,8 +323,8 @@ int SetConnection(){
 int GetKeyByDiffieHellman(int sock_fd){
     int p = 19961; //prime number
     int g = 7;
-    srand(time(NULL));
-    uint a = rand() % 10000;
+    uint a = rand() % 100000;
+    printf("randed %ud", a);
     uint A = 1;
     for (uint i = 0; i < a; ++i) {
         A = A * g % p;
@@ -338,6 +341,7 @@ int GetKeyByDiffieHellman(int sock_fd){
     for (uint i = 0; i < a; ++i) {
         key = key * B % p;
     }
+    printf("key = %d\n", key);
     return key;
 }
 
@@ -348,39 +352,37 @@ int DoCommunication(char* buf, char *login){
     }
 
     printf("sock_fd = %d\nNow We have to get key\n", sock_fd);
-    for (int i = 0; i < 8; ++i) {
-        unsigned char c = GetKeyByDiffieHellman(sock_fd) % 256;
-        for (int j = 0; j < MAXLINE / 8; ++j) {
-            glob_key[i * (MAXLINE / 8) + j] = c;
-        }
-    }
-    printf("key = %s\nNow We have to be authorized\n", glob_key);
-    Send2Server(login, sock_fd, strlen(login));
+    int key1 = GetKeyByDiffieHellman(sock_fd);
+    int key2 = GetKeyByDiffieHellman(sock_fd);
+    Make_keys(key1, key2, (char*)glob_key, (char*)IV);
+    printf("key = %s\n", glob_key);
+    //unsigned char encrypt_login[MAXLINE] = {0};
+    //int n_log = encrypt(login, MAXLINE, glob_key, IV, encrypt_login);
+    //Send2Server((char*)encrypt_login, sock_fd, n_log);
     free(login);
     int n;
 
     int forked = fork();
     if(forked) {
         while (1) {
+            memset(buf, 0, MAXLINE);
             n = read(STDIN_FILENO, buf, MAXLINE);
 
             if(CP_CommandDetected(buf)){
                 CP2Server(buf, n, sock_fd);
                 printf("You can continue\n");
-                goto L;
             }
 
-            char encrypt_buf[MAXLINE] = {0};
-            encrypt(buf, n, glob_key, glob_key, encrypt_buf);
-            if(Send2Server(encrypt_buf, sock_fd, n) == -1){
+            unsigned char encrypt_buf[MAXLINE] = {0};
+            int n1 = encrypt((unsigned char*)buf, n, glob_key, IV, encrypt_buf);
+            decrypt(encrypt_buf, n1, glob_key, IV, (unsigned char*)buf);
+            if(Send2Server((char*)encrypt_buf, sock_fd, n1) == -1){
                 printf("Send2Server error\n");
                 break;
             }
             if (!strcmp(buf, "exit\n")) {
                 break;
             }
-            L:
-            memset(buf, 0, MAXLINE);
         }
     } else{
         sock_fd_For_handler = -1;
